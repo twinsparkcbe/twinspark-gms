@@ -71,8 +71,11 @@ export function PaymentDetailsCard({
         <p className="text-lg font-semibold text-neutral-900">{payeeName}</p>
 
         <div className="mt-1 flex items-center gap-2">
-          <span className="rounded-[8px] bg-white px-3 py-1.5 font-mono text-sm text-neutral-900">{upiId}</span>
-          <Button type="button" variant="ghost" size="icon" className="size-9" aria-label="Copy UPI ID" onClick={handleCopy}>
+ <div className="w-[150px] shrink-0 overflow-x-auto rounded-[8px] bg-white">
+            <span className="block w-max px-3 py-1.5 font-mono text-sm whitespace-nowrap text-neutral-900">
+              {upiId}
+            </span>
+          </div>          <Button type="button" variant="ghost" size="icon" className="size-9" aria-label="Copy UPI ID" onClick={handleCopy}>
             {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
           </Button>
         </div>
