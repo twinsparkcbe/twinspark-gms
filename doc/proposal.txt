@@ -1,0 +1,159 @@
+                                                                                Twinspark Tyres And Bike Garage — Project Proposal
+
+
+                                          Project Proposal
+                                       Garage Management System
+                             Prepared for Twinspark Tyres And Bike Garage, Coimbatore
+
+1. Introduction
+Twinspark Tyres And Bike Garage is a premium motorcycle tyre retailer and professional service centre located in
+Coimbatore, serving performance and sports motorcycles such as Yamaha, KTM, BMW and Kawasaki. Alongside track
+tyres and brand-new tyres, the business sells engine oil, chains, sprocket kits, brake parts, lubricants, accessories and
+other spare parts, and runs a full-service motorcycle garage.
+This proposal outlines a web-based Garage Management System designed to digitize and unify Twinspark's inventory,
+purchase, sales, service and billing operations, replacing the current manual record-keeping with a single, centralized
+platform.
+
+
+2. Business Problem
+Inventory, sales and service records are currently maintained manually, making it difficult to track stock accuracy,
+monitor purchase and sales performance, and get a real-time view of business health. Twinspark needs a centralized
+system to manage inventory, purchases, sales, garage services, invoicing, profit tracking, online tyre orders and
+business reporting.
+
+
+3. Project Objective
+The objective is to develop a single web application that helps Twinspark manage Inventory, Purchases, Sales, Service
+Jobs, Billing, Customers, Online Orders and Reports — reducing manual work while improving inventory accuracy and
+overall business visibility.
+
+
+4. Scope of Work — System Modules
+The system will be delivered with the following core modules:
+
+ Module                         Description
+
+ Dashboard                      At-a-glance view of stock, sales, purchases, revenue, profit and low-stock alerts.
+
+ Inventory Management           Central catalogue of track tyres, brand-new tyres, oils, chains, sprockets, brake
+                                parts and accessories with purchase & selling price tracking.
+
+ Purchase Management            Records purchase entries and automatically updates stock levels.
+
+ Sales Management               Point-of-sale style billing for tyres and other products, with optional tyre-fitting
+                                charges and automatic stock deduction.
+
+ Service Management             Digital job cards for General & Specific services, labour charges and inventory
+                                consumption during service.
+
+ Customer & Vehicle             Maintains customer contact details and vehicle history for repeat service.
+ Management
+
+ Billing & Invoicing            Unified billing engine for Sales and Service invoices with optional GST and
+                                discount.
+
+                                                        Page 1 of 3
+                                                                               Twinspark Tyres And Bike Garage — Project Proposal
+
+ Module                         Description
+
+ Online Track Tyre Orders       Public order form with payment-screenshot upload, admin approval/dispatch
+                                workflow, and printable courier-label PDF export.
+
+ Reports                        Inventory, purchase, sales, service, revenue, profit and stock-movement
+                                reports.
+
+ User & Role Management         Role-based access for Administrator and Sales Person accounts.
+
+
+5. Key Functional Highlights
+Inventory & Purchases
+ • Track Tyres are managed without category or brand; Brand New Tyres require both.
+ • Purchase price and selling price are always stored separately.
+ • Stock increases automatically on purchase entry and decreases on sales or service usage.
+
+Sales & Fitting
+ • A single Sales module handles track tyres, brand-new tyres and all other inventory items.
+ • Optional tyre fitting at ₹300 per wheel, itemized separately from product cost.
+
+Service & Job Cards
+ • Every service generates a digital Job Card capturing customer, vehicle and odometer details.
+ • Supports predefined General Service packages as well as Specific (individual) services.
+ • Inventory consumed during service (oil, brake pads, chains, etc.) is automatically deducted and itemized on the
+   invoice.
+
+Billing & Invoicing
+ • Sales and Service share a common billing engine with optional GST and discount.
+ • Labour charges appear only on Service invoices; fitting charges appear only on Sales invoices.
+
+Online Track Tyre Orders
+ • Customers order via a public link, submitting contact details, address, PIN code, quantity and a payment
+   screenshot.
+ • Admin verifies payment, approves and dispatches orders; stock reduces only after dispatch.
+ • Admin can export a single printable PDF of courier labels for multiple selected orders.
+
+
+6. User Roles & Access
+ Role                       Access
+
+ Administrator              Full system access — Dashboard, Inventory, Purchases, Sales, Service, Reports,
+                            Online Orders, Settings and User Management.
+
+ Sales Person               Restricted access — can create sales invoices, verify and dispatch online orders, and
+                            generate courier labels. No access to Inventory, Purchases, Reports, Dashboard
+                            analytics or Settings.
+
+
+7. Reports
+The system will provide dedicated reports covering:
+
+                                                        Page 2 of 3
+                                                                                Twinspark Tyres And Bike Garage — Project Proposal
+
+ •   Inventory levels and stock movement
+ •   Purchases
+ •   Sales
+ •   Services
+ •   Revenue and profit (calculated as Sales Amount − Purchase Amount)
+
+
+8. Key Business Rules
+ •   Purchase Price and Selling Price are always stored separately.
+ •   Track Tyres do not require Category or Brand; Brand New Tyres require both.
+ •   Stock automatically increases after Purchase and decreases after Sales or Service usage.
+ •   Every Sale and every Service generates an invoice; every Service also generates a Job Card.
+ •   GST and Discount are optional on all invoices.
+ •   Fitting Charges apply only to Sales invoices; Labour Charges apply only to Service invoices.
+ •   Online Orders reduce inventory only after the order is dispatched.
+
+
+9. Deliverables
+ •   A fully functional, responsive web application covering all modules listed in Section 4.
+ •   Role-based login for Administrator and Sales Person users.
+ •   Automated invoice and job-card generation (print/PDF ready).
+ •   Public online order form with admin approval and dispatch workflow.
+ •   Courier label PDF export for online orders.
+ •   Dashboard and reporting suite as described in Sections 5 and 7.
+ •   Basic user documentation for Admin and Sales Person roles.
+
+
+10. Project Scope Summary
+In Scope: Dashboard, Inventory Management, Purchase Management, Sales Management, Service Management,
+Customer & Vehicle Management, Billing & Invoice Generation, Job Card Management, Online Track Tyre Orders,
+Courier Label PDF Export, Reports, and User Role Management.
+Any requirements outside the modules and rules described in this document — for example third-party accounting
+integration, SMS/WhatsApp notifications, or multi-branch support — are considered out of scope for this phase and
+can be discussed as future enhancements.
+
+
+11. Conclusion
+This Garage Management System will give Twinspark Tyres And Bike Garage a single, centralized platform to run day-
+to-day operations — from inventory and purchases to sales, service and online tyre orders — while giving
+management clear, real-time visibility into revenue and profit. We look forward to partnering with Twinspark to
+deliver this solution.
+
+
+
+
+                                                         Page 3 of 3
+

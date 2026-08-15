@@ -1,0 +1,153 @@
+"use client";
+
+import { IndianRupee, Receipt, ShoppingCart } from "lucide-react";
+
+import { formatDate, formatINR } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { PurchaseEntryRow, PurchaseStats } from "@/services/purchases";
+import { downloadXlsx, todayForFilename, type XlsxColumn } from "@/lib/xlsx-export";
+
+import { fetchPurchaseReportAction, type PurchaseReportData } from "@/app/(app)/reports/actions";
+
+import { BackToReports } from "./back-to-reports";
+import { DashboardDateRangeFilter } from "@/components/dashboard/dashboard-date-range-filter";
+import { DownloadXlsxButton } from "./download-xlsx-button";
+import { useReportDateRange } from "./use-report-date-range";
+
+const STAT_CARD_CLASS = "rounded-xl border border-neutral-200 bg-white p-5 shadow-sm";
+
+function StatCard({ icon: Icon, iconClassName, label, value }: { icon: React.ComponentType<{ className?: string }>; iconClassName: string; label: string; value: string }) {
+  return (
+    <div className={STAT_CARD_CLASS}>
+      <div className="flex items-center gap-2">
+        <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", iconClassName)}>
+          <Icon className="size-4" />
+        </div>
+        <p className="text-sm font-medium text-neutral-500">{label}</p>
+      </div>
+      <p className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">{value}</p>
+    </div>
+  );
+}
+
+// Date | Item | Brand | Qty | Unit Price | Total | Batch #
+const ROW_GRID_CLASS = "grid grid-cols-[100px_minmax(160px,1fr)_130px_80px_110px_110px_120px] gap-3";
+
+export function PurchaseReportClient({
+  initialEntries,
+  initialTotal,
+  initialStats,
+}: {
+  initialEntries: PurchaseEntryRow[];
+  initialTotal: number;
+  initialStats: PurchaseStats;
+}) {
+  const { preset, customFrom, customTo, data, rangeLabel, isLoading, canReset, setCustomFrom, setCustomTo, handlePresetChange, handleApplyCustom, handleReset } = useReportDateRange<PurchaseReportData>(
+    { entries: initialEntries, total: initialTotal, stats: initialStats },
+    fetchPurchaseReportAction
+  );
+
+  const PURCHASE_COLUMNS: XlsxColumn<PurchaseEntryRow>[] = [
+    { header: "Date", accessor: (entry) => formatDate(entry.purchaseDate) },
+    { header: "Item", accessor: (entry) => entry.itemName },
+    { header: "SKU", accessor: (entry) => entry.itemSkuCode },
+    { header: "Brand", accessor: (entry) => entry.brandName },
+    { header: "Qty", accessor: (entry) => entry.quantity },
+    { header: "Unit Price", accessor: (entry) => entry.unitPrice },
+    { header: "Total", accessor: (entry) => entry.totalAmount },
+    { header: "Batch #", accessor: (entry) => entry.batchNumber },
+  ];
+
+  function handleDownload() {
+    downloadXlsx(`twinspark-purchase-report-${todayForFilename()}`, "Purchases", PURCHASE_COLUMNS, data.entries);
+  }
+
+  return (
+    <div className="space-y-6">
+      <BackToReports />
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900">Purchase Report</h1>
+          <p className="mt-1 text-sm text-neutral-500">What you&apos;ve bought, from whom, and what it cost.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <DashboardDateRangeFilter
+            preset={preset}
+            customFrom={customFrom}
+            customTo={customTo}
+            isLoading={isLoading}
+            canReset={canReset}
+            onPresetChange={handlePresetChange}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+            onApplyCustom={handleApplyCustom}
+            onReset={handleReset}
+          />
+          <DownloadXlsxButton onClick={handleDownload} disabled={data.entries.length === 0} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <StatCard icon={IndianRupee} iconClassName="bg-warning/10 text-warning" label={`Total Purchase Amount (${rangeLabel})`} value={formatINR(data.stats.totalPurchaseAmount)} />
+        <StatCard icon={ShoppingCart} iconClassName="bg-info-bg text-info" label={`Entries (${rangeLabel})`} value={data.stats.entryCount.toLocaleString("en-IN")} />
+      </div>
+
+      <div className="overflow-x-auto">
+        <div role="table" aria-label="Purchase Report" aria-busy={isLoading} className="min-w-[900px]">
+          <div role="row" className={cn(ROW_GRID_CLASS, "px-4 py-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase")}>
+            <span>Date</span>
+            <span>Item</span>
+            <span>Brand</span>
+            <span>Qty</span>
+            <span>Unit Price</span>
+            <span>Total</span>
+            <span className="text-right">Batch #</span>
+          </div>
+
+          <div className={cn("flex flex-col gap-2", isLoading && "opacity-60 transition-opacity")}>
+            {data.entries.length === 0 && (
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <Receipt className="size-10 text-neutral-300" />
+                <p className="text-sm text-neutral-500">No purchases in this period.</p>
+              </div>
+            )}
+
+            {data.entries.map((entry) => (
+              <div key={entry.id} role="row" className={cn(ROW_GRID_CLASS, "items-center rounded-[10px] border border-neutral-200 bg-white px-4 py-3 shadow-sm")}>
+                <div role="cell" aria-label="Date" className="min-w-0 text-sm text-neutral-700">
+                  {formatDate(entry.purchaseDate)}
+                </div>
+                <div role="cell" aria-label="Item" className="min-w-0">
+                  <div className="truncate font-semibold text-neutral-900">{entry.itemName}</div>
+                  <div className="truncate font-mono text-[11px] text-neutral-500">{entry.itemSkuCode}</div>
+                </div>
+                <div role="cell" aria-label="Brand" className="min-w-0 truncate text-sm text-neutral-700">
+                  {entry.brandName ?? "—"}
+                </div>
+                <div role="cell" aria-label="Quantity" className="min-w-0 text-sm text-neutral-700">
+                  {entry.quantity.toLocaleString("en-IN")}
+                </div>
+                <div role="cell" aria-label="Unit price" className="min-w-0 text-sm text-neutral-700">
+                  {formatINR(entry.unitPrice)}
+                </div>
+                <div role="cell" aria-label="Total" className="min-w-0 text-sm font-semibold text-neutral-900">
+                  {formatINR(entry.totalAmount)}
+                </div>
+                <div role="cell" aria-label="Batch number" className="text-right font-mono text-xs text-neutral-500">
+                  {entry.batchNumber}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {data.total > data.entries.length && (
+        <p className="text-center text-xs text-neutral-400">
+          Showing the first {data.entries.length.toLocaleString("en-IN")} of {data.total.toLocaleString("en-IN")} entries.
+        </p>
+      )}
+    </div>
+  );
+}

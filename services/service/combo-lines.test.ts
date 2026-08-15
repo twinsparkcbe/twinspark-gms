@@ -1,0 +1,344 @@
+import { describe, expect, it } from "vitest";
+
+import type { ComboRow } from "@/services/combos/types";
+import { buildServiceInvoiceView, type BusinessInfo } from "@/services/shared/invoice";
+
+import { buildJobCardView } from "./job-card";
+import type { ServiceJobRow } from "./jobs";
+import { buildPickerIndex, resolveSelection } from "./picker";
+import { computeServiceJobTotals } from "./totals";
+
+/**
+ * Combos on a Service Job (plan §3.C/§3.D, test cases §E/§F/§I).
+ *
+ * Covers the seams the combo work opened up in the Service module itself —
+ * the picker offering combos, the totals treating included parts as free,
+ * and both prints showing the bundle as one price with its contents beneath.
+ * The combo's own logic is tested in services/combos.
+ */
+
+const BUSINESS: BusinessInfo = {
+  name: "TwinSpark",
+  addressLines: ["Coimbatore"],
+  phone: "9876543210",
+};
+
+const COMBO_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+function combo(overrides: Partial<ComboRow> = {}): ComboRow {
+  return {
+    id: COMBO_ID,
+    name: "₹7,499 Combo",
+    description: null,
+    comboPrice: 7499,
+    validFrom: null,
+    validTo: null,
+    isActive: true,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    components: [
+      {
+        id: "c1",
+        position: 0,
+        componentType: "ITEM",
+        generalServicePackageId: null,
+        specificServiceId: null,
+        inventoryItemId: "33333333-3333-4333-8333-333333333301",
+        quantity: 2,
+        pricing: "INCLUDED",
+        name: "Front Tyre",
+        unitPrice: 3200,
+        unitPurchasePrice: 1900,
+        availableQuantity: 8,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function job(overrides: Partial<ServiceJobRow> = {}): ServiceJobRow {
+  return {
+    id: "44444444-4444-4444-8444-444444444401",
+    jobNumber: "SJ-000001",
+    invoiceNumber: "TW-J-000001",
+    customerId: "c",
+    customerName: "Arun Kumar",
+    customerMobile: "9876543210",
+    customerAddress: null,
+    vehicleId: "v",
+    vehicleNumber: "TN37AB1234",
+    vehicleModel: "KTM Duke 390",
+    odometerReading: 12000,
+    status: "COMPLETED",
+    complaintNotes: null,
+    mechanicNotes: "internal only",
+    expectedDeliveryAt: null,
+    completedAt: "2026-08-12T10:00:00.000Z",
+    deliveredAt: null,
+    paymentStatus: "PAID",
+    paymentMode: "CASH",
+    cashAmount: 1150,
+    upiAmount: 0,
+    deliveryStatus: "WAITING",
+    gstApplicable: false,
+    gstAmount: 0,
+    discountApplicable: false,
+    discountAmount: 0,
+    subtotal: 7499,
+    inventoryTotal: 0,
+    grandTotal: 7499,
+    createdAt: "2026-08-12T09:00:00.000Z",
+    lines: [
+      {
+        id: "l1",
+        position: 1,
+        lineType: "COMBO",
+        generalServicePackageId: null,
+        specificServiceId: null,
+        comboId: COMBO_ID,
+        comboContents: ["Front Tyre ×2", "General Service"],
+        comboListValue: 8500,
+        description: "₹7,499 Combo",
+        quantity: 1,
+        rate: 7499,
+        amount: 7499,
+      },
+    ],
+    usage: [
+      {
+        id: "u1",
+        inventoryItemId: "33333333-3333-4333-8333-333333333301",
+        itemName: "Front Tyre",
+        quantityUsed: 2,
+        unitPrice: 0,
+        lineTotal: 0,
+        comboId: COMBO_ID,
+        includedInCombo: true,
+      },
+    ],
+    events: [],
+    images: [],
+    assignedMechanicId: null,
+    assignedMechanicName: null,
+    ...overrides,
+  };
+}
+
+describe("picker — combos", () => {
+  const NOW = new Date("2026-08-15T06:30:00.000Z");
+
+  function index(combos: ComboRow[]) {
+    return buildPickerIndex({ packages: [], specificServices: [], items: [], combos });
+  }
+
+  it("offers an available combo in the same search index", () => {
+    const entries = index([combo()]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ kind: "COMBO", name: "₹7,499 Combo", rate: 7499 });
+  });
+
+  it("lists combos before the individual catalogs, so the bundle is the obvious pick", () => {
+    const entries = buildPickerIndex({ packages: [], specificServices: [], items: [], combos: [combo()] });
+
+    expect(entries[0].kind).toBe("COMBO");
+  });
+
+  it("reads no clock of its own — whatever the caller passes is shown", () => {
+    // Availability is decided server-side by listSellableCombos. If this
+    // module filtered by date too, the client render would disagree with the
+    // server pass at a date boundary.
+    const expired = index([combo({ validTo: "2020-01-01" })]);
+
+    expect(expired).toHaveLength(1);
+  });
+
+  it("carries the full definition, so picking needs no second lookup", () => {
+    expect(index([combo()])[0].combo?.components).toHaveLength(1);
+  });
+
+  it("resolves a picked combo to its own target rather than a plain line", () => {
+    const result = resolveSelection(index([combo()])[0], { hasPackageLine: false });
+
+    expect(result).toMatchObject({ ok: true, target: "COMBO" });
+  });
+
+  it("is not blocked by the one-package rule — a combo isn't the job's package", () => {
+    expect(resolveSelection(index([combo()])[0], { hasPackageLine: true }).ok).toBe(true);
+  });
+});
+
+describe("totals — included parts", () => {
+  const prices = { sellingPriceOf: (id: string) => (id === "tyre" ? 3200 : undefined) };
+
+  it("counts the combo line at its fixed price", () => {
+    const result = computeServiceJobTotals({
+      lines: [{ quantity: "1", rate: "7499" }],
+      parts: [],
+      prices,
+      gstApplicable: false,
+      gstPercent: "18",
+      discountApplicable: false,
+      discountAmount: "",
+    });
+
+    expect(result.grandTotal).toBe(7499);
+  });
+
+  it("adds nothing for a part covered by the combo price", () => {
+    const result = computeServiceJobTotals({
+      lines: [{ quantity: "1", rate: "7499" }],
+      parts: [{ inventoryItemId: "tyre", quantityUsed: "2", includedInCombo: true }],
+      prices,
+      gstApplicable: false,
+      gstPercent: "18",
+      discountApplicable: false,
+      discountAmount: "",
+    });
+
+    expect(result.partsTotal).toBe(0);
+    expect(result.grandTotal).toBe(7499);
+  });
+
+  it("still charges a part added outside the combo", () => {
+    const result = computeServiceJobTotals({
+      lines: [{ quantity: "1", rate: "7499" }],
+      parts: [
+        { inventoryItemId: "tyre", quantityUsed: "2", includedInCombo: true },
+        { inventoryItemId: "tyre", quantityUsed: "1", includedInCombo: false },
+      ],
+      prices,
+      gstApplicable: false,
+      gstPercent: "18",
+      discountApplicable: false,
+      discountAmount: "",
+    });
+
+    expect(result.partsTotal).toBe(3200);
+    expect(result.grandTotal).toBe(10699);
+  });
+
+  it("computes GST on the combo price, not on the list value of its contents", () => {
+    const result = computeServiceJobTotals({
+      lines: [{ quantity: "1", rate: "1000" }],
+      parts: [{ inventoryItemId: "tyre", quantityUsed: "1", includedInCombo: true }],
+      prices,
+      gstApplicable: true,
+      gstPercent: "18",
+      discountApplicable: false,
+      discountAmount: "",
+    });
+
+    expect(result.gstAmount).toBe(180);
+  });
+});
+
+describe("invoice — combo presentation", () => {
+  it("prints the combo as one priced line", () => {
+    const view = buildServiceInvoiceView(job(), BUSINESS);
+
+    expect(view.serviceLines).toHaveLength(1);
+    expect(view.serviceLines[0]).toMatchObject({ description: "₹7,499 Combo", amountLabel: expect.stringContaining("7,499") });
+  });
+
+  it("lists the contents beneath it, unpriced", () => {
+    const view = buildServiceInvoiceView(job(), BUSINESS);
+
+    expect(view.serviceLines[0].comboContents).toEqual(["Front Tyre ×2", "General Service"]);
+  });
+
+  it("attaches no contents to an ordinary line", () => {
+    const ordinary = job({
+      lines: [
+        {
+          id: "l1",
+          position: 1,
+          lineType: "SPECIFIC",
+          generalServicePackageId: null,
+          specificServiceId: "s",
+          comboId: null,
+          comboContents: [],
+          comboListValue: null,
+          description: "Water Wash",
+          quantity: 1,
+          rate: 150,
+          amount: 150,
+        },
+      ],
+    });
+
+    expect(buildServiceInvoiceView(ordinary, BUSINESS).serviceLines[0].comboContents).toBeUndefined();
+  });
+
+  it("shows an included part as 'Included' rather than ₹0.00", () => {
+    const view = buildServiceInvoiceView(job(), BUSINESS);
+
+    expect(view.inventoryLines[0]).toMatchObject({ unitPriceLabel: "Included", amountLabel: "—", includedInCombo: true });
+  });
+
+  it("prices a part that wasn't part of the combo normally", () => {
+    const withExtra = job({
+      usage: [
+        {
+          id: "u2",
+          inventoryItemId: "i2",
+          itemName: "Brake Pad",
+          quantityUsed: 1,
+          unitPrice: 600,
+          lineTotal: 600,
+          comboId: null,
+          includedInCombo: false,
+        },
+      ],
+    });
+
+    expect(buildServiceInvoiceView(withExtra, BUSINESS).inventoryLines[0].amountLabel).toContain("600");
+  });
+
+  it("prints what the customer saved against the snapshotted list value", () => {
+    const view = buildServiceInvoiceView(job(), BUSINESS);
+
+    // 8,500 list − 7,499 charged
+    expect(view.totals.comboSavingsLabel).toContain("1,001");
+  });
+
+  it("hides the savings line when the combo saved nothing", () => {
+    const noSaving = job({
+      lines: [{ ...job().lines[0], comboListValue: 7499 }],
+    });
+
+    expect(buildServiceInvoiceView(noSaving, BUSINESS).totals.comboSavingsLabel).toBeNull();
+  });
+
+  it("never shows a negative saving, even if the combo was priced above list", () => {
+    const overpriced = job({ lines: [{ ...job().lines[0], comboListValue: 5000 }] });
+
+    expect(buildServiceInvoiceView(overpriced, BUSINESS).totals.comboSavingsLabel).toBeNull();
+  });
+
+  it("hides the savings line entirely on a job with no combo", () => {
+    const plain = job({ lines: [{ ...job().lines[0], lineType: "SPECIFIC", comboId: null, comboContents: [], comboListValue: null }] });
+
+    expect(buildServiceInvoiceView(plain, BUSINESS).totals.comboSavingsLabel).toBeNull();
+  });
+
+  it("sums the saving across two combos on one job", () => {
+    const two = job({
+      lines: [job().lines[0], { ...job().lines[0], id: "l2", position: 2, comboListValue: 3000, rate: 2500, amount: 2500 }],
+    });
+
+    // 1,001 + 500
+    expect(buildServiceInvoiceView(two, BUSINESS).totals.comboSavingsLabel).toContain("1,501");
+  });
+});
+
+describe("job card — combo presentation", () => {
+  it("lists the combo contents on the printed card too", () => {
+    const view = buildJobCardView(job(), BUSINESS);
+
+    expect(view.lines[0].comboContents).toEqual(["Front Tyre ×2", "General Service"]);
+  });
+
+  it("still never carries mechanic notes onto the card", () => {
+    expect(JSON.stringify(buildJobCardView(job(), BUSINESS))).not.toContain("internal only");
+  });
+});

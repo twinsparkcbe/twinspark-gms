@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens — mirrors twinspark-style-guide.md exactly.
+ * Do not hand-pick new colors in components; add a token here first.
+ */
+:root {
+  --radius: 0.625rem; /* 10px — buttons/inputs/cards */
+
+  /* Brand — v1.2: rose/slate palette from the approved POC (see
+     twinspark-style-guide.md §12). Names kept stable so component classes
+     (bg-brand-red, bg-brand-black, ...) don't need to change when tokens do. */
+  --brand-black: #020617; /* slate-950 — sidebar */
+  --brand-black-soft: #0f172a; /* slate-900 — secondary dark surface */
+  --brand-red: #e11d48; /* rose-600 — primary CTA/active state */
+  --brand-red-dark: #be123c; /* rose-700 — hover/pressed */
+  --brand-gold: #e4b343;
+  --brand-white: #ffffff;
+
+  /* Semantic (status + payment channel) */
+  --success: #059669; /* emerald-600 — success / cash channel */
+  --success-bg: #ecfdf5; /* emerald-50 */
+  --warning: #f97316; /* orange-500 — alerts (solid, no light variant) */
+  --danger: #dc2626; /* red-600 — distinct from brand-red on purpose */
+  --danger-bg: #fef2f2; /* red-50 */
+  --info: #1d4ed8; /* blue-700 — info / UPI channel */
+  --info-bg: #eff6ff; /* blue-50 */
+  --channel-purple: #7e22ce; /* purple-700 — card channel */
+  --channel-purple-bg: #faf5ff; /* purple-50 */
+
+  /* Neutrals — exact Tailwind slate scale */
+  --neutral-0: #ffffff;
+  --neutral-50: #f8fafc;
+  --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-600: #475569;
+  --neutral-900: #0f172a;
+
+  /* shadcn/ui semantic mapping */
+  --background: var(--neutral-0);
+  --foreground: var(--neutral-900);
+  --card: var(--neutral-0);
+  --card-foreground: var(--neutral-900);
+  --popover: var(--neutral-0);
+  --popover-foreground: var(--neutral-900);
+  --primary: var(--brand-red);
+  --primary-foreground: var(--neutral-0);
+  --primary-hover: var(--brand-red-dark);
+  --secondary: var(--neutral-0);
+  --secondary-foreground: var(--neutral-900);
+  --muted: var(--neutral-50);
+  --muted-foreground: var(--neutral-600);
+  --accent: var(--neutral-100);
+  --accent-foreground: var(--neutral-900);
+  --destructive: var(--danger);
+  --border: var(--neutral-200);
+  --input: var(--neutral-200);
+  --ring: var(--brand-red);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand + semantic utilities: bg-brand-red, text-success, border-warning, etc. */
+  --color-brand-black: var(--brand-black);
+  --color-brand-black-soft: var(--brand-black-soft);
+  --color-brand-red: var(--brand-red);
+  --color-brand-red-dark: var(--brand-red-dark);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-white: var(--brand-white);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-channel-purple: var(--channel-purple);
+  --color-channel-purple-bg: var(--channel-purple-bg);
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-900: var(--neutral-900);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-muted text-foreground font-sans;
+  }
+}

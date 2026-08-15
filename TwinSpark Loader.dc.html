@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="viewport" content="width=device-width,initial-scale=1"/><style>
+@font-face{font-family:'Oswald';src:local('Oswald');}
+html,body{background:transparent;}
+.stage{width:100vw;height:100vh;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden;font-family:'Arial Narrow',Helvetica,Arial,sans-serif;}
+.rig{position:relative;width:360px;height:360px;display:flex;align-items:center;justify-content:center;}
+.ringsvg{position:absolute;inset:-34px;width:428px;height:428px;animation:spin 2.6s linear infinite;opacity:.85;}
+.ringsvg2{position:absolute;inset:-8px;width:376px;height:376px;animation:spin 3.4s linear infinite reverse;opacity:.6;}
+.glowpad{position:absolute;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(224,39,59,.32) 0%,rgba(224,39,59,.12) 45%,rgba(224,39,59,0) 72%);animation:pulse 2.4s ease-in-out 1.7s infinite;}
+.logowrap{position:relative;width:260px;height:260px;filter:drop-shadow(0 0 16px rgba(224,39,59,.4));}
+.piece{position:absolute;inset:0;width:100%;height:100%;background-image:url('assets/twinspark-logo-sm.png');background-size:100% 100%;background-repeat:no-repeat;opacity:0;}
+.p1{clip-path:inset(2% 6% 70% 6%);animation:fly1 .95s cubic-bezier(.32,1.6,.55,1) .05s forwards;}
+.p2{clip-path:inset(14% 12% 50% 4%);animation:fly2 .95s cubic-bezier(.32,1.6,.55,1) .18s forwards;}
+.p3{clip-path:inset(30% 30% 46% 10%);animation:fly3 .95s cubic-bezier(.32,1.6,.55,1) .3s forwards;}
+.p4{clip-path:inset(30% 44% 30% 2%);animation:fly4 1s cubic-bezier(.32,1.6,.55,1) .42s forwards;}
+.p5{clip-path:inset(30% 2% 30% 44%);animation:fly5 1s cubic-bezier(.32,1.6,.55,1) .42s forwards;}
+.p6{clip-path:inset(32% 30% 40% 30%);animation:fly6 .9s cubic-bezier(.32,1.6,.55,1) .58s forwards;}
+.p7{clip-path:inset(52% 18% 18% 18%);animation:fly7 1s cubic-bezier(.32,1.6,.55,1) .68s forwards;}
+.p8{clip-path:inset(70% 4% 0% 4%);animation:fly8 1s cubic-bezier(.32,1.6,.55,1) .82s forwards;}
+.flash{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.9) 0%,rgba(255,255,255,0) 60%);opacity:0;animation:snapflash 1.9s ease-out 0s 1 forwards;pointer-events:none;}
+.caption{position:absolute;bottom:9%;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;animation:fadein .6s ease-out 1.9s forwards;}
+.word{color:#f2f3f5;font-weight:800;font-size:22px;letter-spacing:6px;text-transform:uppercase;}
+.word span{color:#e0273b;}
+.sub{display:flex;align-items:center;gap:8px;color:#8b93a7;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:600;}
+.dots{display:flex;gap:5px;}
+.dot{width:5px;height:5px;border-radius:50%;background:#e0273b;animation:dotpulse 1.2s ease-in-out infinite;}
+.dot:nth-child(2){animation-delay:.15s;}
+.dot:nth-child(3){animation-delay:.3s;}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.5;}50%{transform:scale(1.15);opacity:.85;}}
+@keyframes snapflash{0%,74%{opacity:0;transform:scale(.7);}80%{opacity:.85;transform:scale(1.05);}100%{opacity:0;transform:scale(1.3);}}
+@keyframes fadein{to{opacity:1;}}
+@keyframes dotpulse{0%,100%{opacity:.25;transform:scale(.8);}50%{opacity:1;transform:scale(1.15);}}
+@keyframes fly1{0%{opacity:0;transform:translate(-40px,-160px) rotate(-24deg) scale(.5);}100%{opacity:1;transform:translate(0,0) rotate(0) scale(1);}}
+@keyframes fly2{0%{opacity:0;transform:translate(120px,-120px) rotate(30deg) scale(.5);}100%{opacity:1;transform:translate(0,0) rotate(0) scale(1);}}
+@keyframes fly3{0%{opacity:0;transform:translate(-130px,-40px) rotate(-18deg) scale(.5);}100%{opacity:1;transform:translate(0,0) rotate(0) scale(1);}}
+@keyframes fly4{0%{opacity:0;transform:translate(-220px,60px) rotate(-45deg) scale(.4);}100%{opacity:1;transform:translate(0,0) rotate(0) scale(1);}}
+@keyframes fly5{0%{opacity:0;transform:translate(220px,60px) rotate(45deg) scale(.4);}100%{opacity:1;transform:translate(0,0) rotate(0) scale(1);}}
+@keyframes fly6{0%{opacity:0;transform:translate(0,-90px) scale(.3);}100%{opacity:1;transform:translate(0,0) rotate(0) scale(1);}}
+@keyframes fly7{0%{opacity:0;transform:translate(0,160px) rotate(10deg) scale(.5);}100%{opacity:1;transform:translate(0,0) rotate(0) scale(1);}}
+@keyframes fly8{0%{opacity:0;transform:translate(0,220px) scale(.5);}100%{opacity:1;transform:translate(0,0) rotate(0) scale(1);}}
+</style></helmet><div class="stage" data-screen-label="TwinSpark loader"><div class="rig"><svg class="ringsvg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#e0273b" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="70 219"/></svg><svg class="ringsvg2" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#d8b23a" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="40 249"/></svg><div class="glowpad"></div><div class="logowrap"><div class="piece p1"></div><div class="piece p2"></div><div class="piece p3"></div><div class="piece p4"></div><div class="piece p5"></div><div class="piece p6"></div><div class="piece p7"></div><div class="piece p8"></div><div class="flash"></div></div><div class="caption"><div class="sub">Loading workspace<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div></div></div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:480,&quot;height&quot;:480}}"></script>
+</body>
+</html>
