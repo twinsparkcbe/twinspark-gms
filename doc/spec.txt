@@ -1,0 +1,711 @@
+Twinspark Tyres And Bike Garage — Garage Management
+System
+Full Functional & Data Specification (Single Source of Truth)
+      Purpose of this document: This is the complete, self-contained specification for the
+      Twinspark Garage Management System. It is meant to be used as the single reference
+      context when generating code (e.g. in Claude Code) — every module, field, business
+      rule, role permission, invoice format, and report is documented here so no additional
+      context should be required.
+
+
+
+1. Project Overview
+Client: Twinspark Tyres And Bike Garage Location: Coimbatore, Tamil Nadu Business
+Type: Premium motorcycle tyre retailer + professional motorcycle service center, serving
+performance/sports bikes (Yamaha, KTM, BMW, Kawasaki, and other premium brands).
+Core Business Lines:
+     1. Selling Track Tyres
+     2. Selling Brand New Tyres and other motorcycle products
+     3. Motorcycle Service & Garage Operations
+
+Other Inventory Sold: Engine Oil, Chains, Chain Sprocket Kits, Brake Parts, Lubricants,
+Accessories, Other Motorcycle Spare Parts.
+Goal: Replace manual inventory/sales/service record-keeping with a single centralized web
+application covering Inventory, Purchases, Sales, Service Jobs, Billing, Customers, Online
+Orders, and Reports — improving inventory accuracy and business visibility while
+reducing manual work.
+
+
+
+2. System Modules (Top Level)
+ #            Module
+
+ 1            Dashboard
+
+ 2            Inventory Management
+
+ 3            Purchase Management
+
+ 4            Sales Management
+
+ 5            Service Management
+ #           Module
+
+ 6           Job Card
+
+ 7           Customer Management
+
+ 8           Vehicle Management
+
+ 9           Billing & Invoice Management
+
+ 10          Online Track Tyre Orders
+
+ 11          Reports
+
+ 12          User & Role Management
+
+
+
+
+3. Core Data Entities
+These are the core objects the system is built around. Field names are suggestions; adapt
+casing/naming to your stack, but keep the meaning and relationships intact.
+
+3.1 User
+ Field                                Type       Notes
+
+ id                                   UUID/int   primary key
+
+ name                                 string
+
+ mobile_number                        string     used for login (or email, TBD)
+
+ password_hash                        string
+
+ role                                 enum        ADMIN , SALES_PERSON
+
+ is_active                            boolean    for disabling accounts
+
+ created_at / updated_at              datetime
+
+
+
+3.2 Customer
+ Field                     Type          Notes
+
+ id                        UUID/int
+
+ name                      string
+ Field                      Type           Notes
+
+ mobile_number              string         primary lookup key for repeat customers
+
+ address                    text
+
+ created_at                 datetime
+
+      Customers are created/reused automatically whenever a Sale or Service is recorded
+      against a mobile number. Search-by-mobile-number should auto-fill name/address for
+      repeat customers.
+
+3.3 Vehicle
+ Field                    Type                  Notes
+
+ id                       UUID/int
+
+ customer_id              FK → Customer         a customer can have multiple vehicles
+
+ vehicle_number           string                registration number
+
+ vehicle_model            string                e.g. "KTM Duke 390"
+
+ odometer_reading         integer               captured per service visit (store latest + history)
+
+
+
+3.4 Category (for Brand New Tyres only)
+ Field           Type                  Notes
+
+ id              UUID/int
+
+ name            string                e.g. "Sports Touring", "Off-Road"
+
+
+
+3.5 Brand (for Brand New Tyres only)
+ Field           Type                   Notes
+
+ id              UUID/int
+
+ name            string                 e.g. "Michelin", "Pirelli", "MRF"
+
+
+
+3.6 Inventory Item
+Covers: Track Tyres, Brand New Tyres, Engine Oil, Chains, Chain Sprocket Kits, Brake
+Parts, Lubricants, Accessories, Other Spare Parts.
+Field                    Type       Notes
+
+id                       UUID/int
+
+item_type                enum       TRACK_TYRE , BRAND_NEW_TYRE , ENGINE_OIL , CHAIN ,
+                                    SPROCKET_KIT , BRAKE_PART , LUBRICANT ,
+                                    ACCESSORY , OTHER_SPARE_PART
+
+product_name             string     required
+
+category_id              FK →       required for Brand New Tyres only; must be null/hidden for
+                         Category   Track Tyres
+
+brand_id                 FK →       required for Brand New Tyres only; must be null/hidden for
+                         Brand      Track Tyres
+
+purchase_price           decimal    always stored separately from selling price
+
+selling_price            decimal    always stored separately from purchase price
+
+available_quantity       integer    current stock; auto-maintained, not manually editable outside
+                                    Purchase/Sales/Service flows
+
+low_stock_threshold      integer    used to trigger dashboard low-stock alerts
+
+created_at /             datetime
+updated_at
+
+
+
+Business rule reminders:
+     Track Tyres → no category, no brand.
+     Brand New Tyres → category and brand are mandatory.
+     Purchase Price and Selling Price must always be two distinct stored fields — never
+     derived from one another.
+
+3.7 Purchase Entry
+Field                 Type            Notes
+
+id                    UUID/int
+
+inventory_item_id FK → Inventory
+                  Item
+
+quantity              integer
+ Field                  Type             Notes
+
+ purchase_price         decimal          price paid per unit for this specific purchase (may differ
+                                         over time even for the same item)
+
+ total_amount           decimal          quantity × purchase_price
+
+ purchase_date          datetime
+
+ created_by             FK → User        must be an Administrator
+
+Behavior: On save, available_quantity on the linked Inventory Item increases by
+quantity . A full purchase history log must be retained (not overwritten).
+
+
+3.8 Sale
+ Field                   Type           Notes
+
+ id                      UUID/int
+
+ customer_id             FK →
+                         Customer
+
+ sale_date               datetime
+
+ fitting_required        boolean        tyre fitting flag
+
+ fitting_wheel_count integer            number of wheels fitted (used to calc fitting charge)
+
+ fitting_charge_total    decimal        fitting_wheel_count × ₹300 — always itemized
+                                        separately from product cost
+
+ gst_applicable          boolean        optional
+
+ gst_amount              decimal        computed if applicable
+
+ discount_applicable boolean            optional
+
+ discount_amount         decimal        flat or % — define one convention
+
+ subtotal                decimal        sum of all SaleItem line totals
+
+ grand_total             decimal        subtotal + fitting_charge_total + gst_amount −
+                                        discount_amount
+
+ invoice_id              FK → Invoice
+
+ created_by              FK → User      Admin or Sales Person
+3.9 Sale Item (line item within a Sale)
+ Field                Type                  Notes
+
+ id                   UUID/int
+
+ sale_id              FK → Sale
+
+ inventory_item_id FK → Inventory
+                   Item
+
+ quantity             integer
+
+ unit_selling_price   decimal               pulled automatically from Inventory Item's
+                                             selling_price at time of sale
+
+ line_total           decimal               quantity × unit_selling_price
+
+
+
+Behavior: On sale completion, available_quantity on each referenced Inventory Item
+decreases by the sold quantity . Applies uniformly to Track Tyres, Brand New Tyres, and
+all other inventory categories (oil, chains, sprockets, accessories, etc.) — they all flow
+through this same Sales module.
+
+3.10 Service Job (Job Card)
+ Field                            Type                        Notes
+
+ id                               UUID/int
+
+ customer_id                      FK → Customer
+
+ vehicle_id                       FK → Vehicle
+
+ odometer_reading                 integer                     captured at time of service
+
+ service_category                 enum                         GENERAL_SERVICE ,
+                                                               SPECIFIC_SERVICE
+
+ selected_general_package_id FK → General Service             if GENERAL_SERVICE
+                             Package
+
+ selected_specific_services       list of FK → Specific       if SPECIFIC_SERVICE ; multi-select
+                                  Service                     allowed
+
+ labour_charge                    decimal                     entered separately by staff
+
+ service_charge                   decimal                     from General Service package, if
+                                                              applicable
+ Field                         Type                        Notes
+
+ job_card_rows                 list of Job Card Line       see 3.11
+
+ service_date                  datetime
+
+ invoice_id                    FK → Invoice
+
+ created_by                    FK → User
+
+
+3.11 Job Card Line (the "No | Description | Amount" table)
+ Field              Type                    Notes
+
+ id                 UUID/int
+
+ service_job_id     FK → Service Job
+
+ line_no            integer                 auto-incremented row number
+
+ description        string                  free text or linked to a service/inventory item
+
+ amount             decimal
+
+
+
+Behavior: Staff can add/remove rows freely; system auto-calculates the running total and
+grand total.
+
+3.12 General Service Package
+ Field            Type         Notes
+
+ id               UUID/int
+
+ name             string       e.g. "Standard General Service"
+
+ included_items list of        e.g. Oil Change, Water Wash, Standard Inspection, etc.
+                string         (configurable)
+
+ service_charge   decimal      package price
+
+
+
+3.13 Specific Service (individually selectable)
+ Field             Type        Notes
+
+ id                UUID/int
+
+ name              string      e.g. Oil Change, Brake Service, Water Wash, Chain Cleaning
+ Field                Type        Notes
+
+ default_charge       decimal     optional default price, editable per job
+
+
+3.14 Service Inventory Usage
+ Field                 Type                  Notes
+
+ id                    UUID/int
+
+ service_job_id        FK → Service Job
+
+ inventory_item_id FK → Inventory            e.g. Engine Oil, Chains, Brake Pads, Tyres, Accessories
+                   Item
+
+ quantity_used         integer
+
+ line_total            decimal               quantity_used × unit selling/cost price (define
+                                             convention)
+
+
+
+Behavior: Reduces available_quantity on the Inventory Item automatically. Appears as
+its own separate section on the Service Invoice (never merged with labour or service charge
+lines).
+
+3.15 Invoice
+ Field                                        Type            Notes
+
+ id                                           UUID/int
+
+ invoice_number                               string          unique, sequential
+
+ invoice_type                                 enum             SALES , SERVICE
+
+ linked_sale_id / linked_service_job_id       FK              one or the other, depending on type
+
+ subtotal                                     decimal
+
+ additional_charges                           decimal         fitting (sales) or labour (service)
+
+ gst_amount                                   decimal         optional
+
+ discount_amount                              decimal         optional
+
+ grand_total                                  decimal
+
+ invoice_date                                 datetime
+ Field                                    Type          Notes
+
+ pdf_url / print_ready_flag               string/bool
+
+
+3.16 Online Track Tyre Order
+ Field                          Type         Notes
+
+ id                             UUID/int
+
+ customer_name                  string
+
+ mobile_number                  string
+
+ address                        text
+
+ pin_code                       string
+
+ quantity                       integer      track tyres ordered
+
+ payment_screenshot_url         file/image   uploaded by customer
+
+ status                         enum          SUBMITTED , PAYMENT_VERIFIED , APPROVED ,
+                                              DISPATCHED , REJECTED
+
+ submitted_at                   datetime
+
+ verified_by / approved_by /    FK →
+ dispatched_by                  User
+
+ dispatched_at                  datetime
+
+
+
+Critical rule: Inventory (Track Tyre stock) is reduced only when status changes to
+DISPATCHED — not at submission, payment verification, or approval.
+
+
+3.17 Courier Label Export
+Generated on demand from one or more selected Online Orders (typically APPROVED or
+DISPATCHED ). Produces a single printable PDF with one label per order, each containing:
+
+      Customer Name
+      Mobile Number
+      Address
+      PIN Code
+      Quantity
+4.1 Authentication & User Roles
+     Two roles only: Administrator and Sales Person.
+     Login via mobile number/username + password (define exact mechanism during
+     build).
+     Role determines visible modules and available actions (see permission matrix in
+     Section 6).
+
+4.2 Dashboard
+Metrics displayed:
+     Current Track Tyre Stock (quantity)
+     Total Sales (count and/or amount — clarify with client which is meant)
+     Purchase Amount (aggregate, likely current month/period)
+     Sales Amount (aggregate)
+     Profit → Profit = Sales Amount − Purchase Amount
+     Current Month Revenue
+     Low Stock Alerts — auto-populated list of Inventory Items where
+     available_quantity ≤ low_stock_threshold
+
+
+Access: Administrator only (Sales Person has no Dashboard analytics access per role
+rules).
+
+4.3 Inventory Management
+     Lists all inventory items across all types (Track Tyres, Brand New Tyres, Engine Oil,
+     Chains, Sprocket Kits, Brake Parts, Lubricants, Accessories, Other Spare Parts).
+     Add/Edit inventory item form:
+           If item_type = TRACK_TYRE → hide Category and Brand fields.
+           If item_type = BRAND_NEW_TYRE → require Category and Brand selection.
+          Always capture Purchase Price and Selling Price as two separate fields.
+          Available Quantity is read-only on this screen — it only changes via Purchase
+          Entries, Sales, or Service usage, never edited directly (except perhaps an Admin-
+          only stock correction/audit feature, if desired — flag as an open question).
+     Access: Administrator only.
+
+4.4 Purchase Management
+     "Add Purchase Entry" form: select Inventory Item → enter Purchase Quantity → enter
+     Purchase Price → Save.
+    On save: available_quantity increases automatically; a Purchase history record is
+    stored (never deleted/overwritten — full audit trail).
+    Purchase History view: filterable list of all past purchase entries (by item, date range,
+    etc.).
+    Access: Administrator only.
+
+4.5 Sales Management
+    Single unified Sales screen for all inventory types (Track Tyres, Brand New Tyres,
+    Engine Oil, Chains, Sprockets, Accessories, etc.).
+    Flow:
+      1. Enter/select Customer (Name, Mobile Number, Address) — auto-suggest
+         existing customers by mobile number.
+      2. Add one or more Sale Items:
+               Track Tyre: select item, enter quantity only (no category/brand prompts).
+               Brand New Tyre: select Category → select Brand → select specific item →
+               enter quantity. Selling Price auto-pulled from Inventory.
+               Other items (oil, chains, sprockets, accessories, etc.): select item, enter
+               quantity, selling price auto-pulled from Inventory.
+      3. Optionally mark Fitting Required and specify number of wheels → system
+         computes Fitting Charge at ₹300/wheel, shown as a distinct line, never merged
+         into product subtotal.
+      4. Optionally apply GST.
+      5. Optionally apply Discount.
+      6. System computes Subtotal → + Fitting Charges → + GST − Discount → Grand
+         Total.
+      7. On completing the sale: inventory auto-deducts for every sold item; a Sales
+         Invoice is generated.
+    Access: Administrator and Sales Person (both can create sales).
+
+4.6 Service Management
+    Flow:
+      1. Capture/select Customer (Name, Mobile Number, Address).
+      2. Capture/select Vehicle (Vehicle Number, Vehicle Model) and current Odometer
+         Reading.
+      3. Choose Service Type:
+             General Service: select a predefined package (e.g. contains Oil Change,
+             Water Wash, Standard Inspection, etc.); package includes a Service Charge;
+             Labour Charge entered separately.
+             Specific Service: select one or more individual services (Oil Change, Brake
+             Service, Water Wash, Chain Cleaning, etc.); Labour Charge entered
+                separately per job.
+       4. Record Service Inventory Usage: staff select any inventory items consumed
+          (Engine Oil, Chains, Brake Pads, Tyres, Accessories) with quantities — auto-
+          deducted from stock and itemized on the invoice separately from service/labour
+          charges.
+       5. Job Card is generated automatically (see 4.7) capturing all of the above plus a
+          free-form line-item table.
+       6. Optionally apply GST and/or Discount.
+       7. Generate Service Invoice.
+     Access: Administrator (full); Sales Person has no access to Service Management per
+     role rules (not listed among Sales Person permissions).
+
+4.7 Job Card
+     Every Service entry automatically produces a Digital Job Card containing:
+          Customer Details
+          Vehicle Details
+          A line-item table: No | Description | Amount — staff can add multiple rows
+          freely.
+          Auto-calculated totals.
+     Printable/exportable, tied 1:1 with its Service Job and its resulting Invoice.
+
+4.8 Customer Management
+     Central customer directory: Name, Mobile Number, Address.
+     Auto-created/reused whenever a Sale or Service references a mobile number.
+     Should support search/filter by name or mobile number, and show a customer's full
+     sales + service history.
+
+4.9 Vehicle Management
+     Tracks vehicles per customer: Vehicle Number, Vehicle Model, Odometer Reading
+     history.
+     Supports one customer having multiple vehicles.
+     Useful for service history lookups (e.g. "show all past services for KA-01-XXXX").
+
+4.10 Billing & Invoice Management
+Both Sales and Service share one billing engine, but render two distinct invoice layouts:
+Sales Invoice contains:
+     Products (line items with quantity, unit price, line total)
+     Tyre Fitting Charges (separate line, only if applicable)
+     GST (optional)
+     Discount (optional)
+     Grand Total
+
+Service Invoice contains:
+     Service Charges (from General Service package, if applicable)
+     Labour Charges (always separate line)
+     Inventory Used (separate itemized section — parts/consumables consumed during
+     service)
+     GST (optional)
+     Discount (optional)
+     Grand Total
+
+Strict separation rules:
+     Fitting Charges appear only on Sales Invoices, never Service.
+     Labour Charges appear only on Service Invoices, never Sales.
+     GST and Discount are optional toggles on every invoice type.
+
+4.11 Online Track Tyre Orders
+     Customer-facing (public link, no login required):
+         Submit: Name, Mobile Number, Address, PIN Code, Quantity of Track Tyres,
+         Payment Screenshot upload.
+         Order enters system with status SUBMITTED .
+     Admin/Sales Person workflow:
+      1. View incoming orders (list/queue).
+      2. Verify Payment Screenshot → mark PAYMENT_VERIFIED .
+      3. Approve Order → APPROVED .
+       4. Dispatch Order → DISPATCHED — this is the only point at which Track Tyre
+          stock is decremented.
+     Courier Label Export: select one or more orders (typically approved/dispatched) →
+     export a single printable PDF containing one label per order (Customer Name, Mobile
+     Number, Address, PIN Code, Quantity), ready to attach to courier packages.
+     Access: Administrator (full workflow) and Sales Person (verify, approve/dispatch,
+     generate labels — per role rules, Sales Person "Can: Verify Online Orders, Dispatch
+     Orders, Generate Courier Labels").
+
+4.12 Reports
+Dedicated reports covering:
+Report               Suggested Filters/Fields
+
+Inventory Report     current stock by item/category/brand, low-stock flags
+
+Purchase Report      date range, item, quantity, purchase price, supplier (if tracked)
+
+Sales Report         date range, item, customer, quantity, revenue, fitting charges
+
+Service Report       date range, service type, labour charges, inventory used
+
+Revenue Report       period-over-period revenue trends
+
+Profit Report        Sales Amount − Purchase Amount, by period
+
+Stock Movement       in/out ledger per inventory item (purchase in, sale out, service usage out,
+Report               online-dispatch out)
+
+
+
+    Access: Administrator only (Sales Person explicitly excluded from Reports).
+
+4.13 User & Role Management
+    Administrator can create/deactivate user accounts and assign roles ( ADMIN /
+    SALES_PERSON ).
+    Access: Administrator only.
+
+
+
+
+5. Consolidated Business Rules (Checklist)
+ 1. Purchase Price and Selling Price are always stored as two separate fields — never one
+    derived from the other.
+ 2. Track Tyres do not require Category or Brand.
+ 3. Brand New Tyres require both Category and Brand.
+ 4. Stock automatically increases after a Purchase Entry.
+ 5. Stock automatically decreases after a completed Sale.
+ 6. Stock automatically decreases when inventory is consumed during a Service.
+ 7. Every Service generates a Job Card.
+ 8. Every Sale generates an Invoice.
+ 9. Every Service generates an Invoice.
+10. GST is optional on every invoice.
+11. Discount is optional on every invoice.
+12. Tyre Fitting Charges appear only on Sales invoices (never Service).
+13. Labour Charges appear only on Service invoices (never Sales).
+14. Fitting Charge rate: ₹300 per wheel, always itemized separately from product cost.
+15. Online Orders reduce inventory only after Dispatch — not at submission, payment
+    verification, or approval.
+16. Profit is calculated as: Profit = Sales Amount − Purchase Amount.
+17. Low-stock items automatically surface on the Dashboard (threshold-based).
+
+
+
+
+6. User Roles & Permission Matrix
+Module / Action                     Administrator Sales Person
+
+Dashboard (analytics)                ✅            ❌
+Inventory Management                 ✅            ❌
+Purchase Management                  ✅            ❌
+Sales — Create Sale / Generate Sales ✅            ✅
+Invoice
+
+Service Management                  ✅             ❌
+Reports (all types)                 ✅             ❌
+Online Orders — View                ✅             ✅
+Online Orders — Verify Payment      ✅             ✅
+Online Orders — Approve             ✅             ✅ (per "Verify Online Orders / Dispatch
+                                                  Orders")
+
+Online Orders — Dispatch            ✅             ✅
+Online Orders — Courier Label       ✅             ✅
+Export
+
+Settings                            ✅             ❌
+User & Role Management              ✅             ❌
+Customer Management                 ✅             ✅ (implicitly, via Sales flow)
+Vehicle Management                  ✅             ❌ (tied to Service, which Sales Person
+                                                  cannot access)
+
+
+
+   ⚠️ Open question to confirm with client: The PRD states Sales Person can "Verify
+   Online Orders" and "Dispatch Orders" but does not explicitly mention "Approve."
+   Recommend clarifying whether Approve is Admin-only or shared with Sales Person
+   before building the permission gate.
+
+
+
+7. Invoice Numbering & Format Notes
+     Recommend a unique, sequential invoice number scheme, e.g. TW-S-000123 (Sales)
+     and TW-J-000123 (Service/Job) to distinguish invoice types at a glance — confirm
+     preferred prefix with client.
+     Invoices should be printable and exportable as PDF.
+     Every invoice must clearly separate: Subtotal → Additional Charges (Fitting or
+     Labour, as applicable) → GST (if applicable) → Discount (if applicable) → Grand Total.
+
+
+
+
+8. Project Scope
+In Scope
+Dashboard, Inventory Management, Purchase Management, Sales Management, Service
+Management, Customer Management, Vehicle Management, Billing & Invoice Generation,
+Job Card Management, Online Track Tyre Orders, Courier Label PDF Export, Reports, User
+& Role Management.
+
+Out of Scope (unless separately requested)
+     Third-party accounting software integration
+     SMS/WhatsApp notifications to customers
+     Multi-branch / multi-location support
+     Payment gateway integration (online orders currently rely on manual screenshot
+     verification)
+     Mobile native apps (this is a web application)
+
+
+
+
+9. Open Questions / Assumptions to Confirm Before Build
+ 1. Login mechanism: mobile number + password, or email-based? Any OTP
+    requirement?
+ 2. Discount: flat amount or percentage (or configurable per invoice)?
+ 3. Should Administrators be able to manually correct/audit stock quantities outside the
+    Purchase/Sale/Service flows (e.g. for damage, loss, stock-take)?
+ 4. Supplier tracking on Purchases — needed now or future enhancement?
+ 5. Exact wording/threshold logic for "low stock" per item (fixed number vs. percentage
+    of typical stock).
+ 6. Should Sales Person's "Approve" permission on Online Orders be enabled or restricted
+    to Admin only (see Section 6 note)?
+ 7. GST rate(s) — single flat rate or configurable/multiple slabs?
+ 8. Invoice numbering format/prefix preference.
+
+
+
+End of specification. This document consolidates and supersedes the original PRD drafts for
+the purpose of development context.
+

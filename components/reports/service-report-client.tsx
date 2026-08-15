@@ -1,0 +1,147 @@
+"use client";
+
+import { CheckCircle2, IndianRupee, Wrench } from "lucide-react";
+
+import { formatDate, formatINR } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { ServiceJobRow, ServiceStats } from "@/services/service";
+import { JOB_STATUS_LABELS, ServiceJobStatusBadge } from "@/components/service/status-badge";
+import { downloadXlsx, todayForFilename, type XlsxColumn } from "@/lib/xlsx-export";
+
+import { fetchServiceReportAction, type ServiceReportData } from "@/app/(app)/reports/actions";
+
+import { BackToReports } from "./back-to-reports";
+import { DashboardDateRangeFilter } from "@/components/dashboard/dashboard-date-range-filter";
+import { DownloadXlsxButton } from "./download-xlsx-button";
+import { useReportDateRange } from "./use-report-date-range";
+
+const STAT_CARD_CLASS = "rounded-xl border border-neutral-200 bg-white p-5 shadow-sm";
+
+function StatCard({ icon: Icon, iconClassName, label, value }: { icon: React.ComponentType<{ className?: string }>; iconClassName: string; label: string; value: string }) {
+  return (
+    <div className={STAT_CARD_CLASS}>
+      <div className="flex items-center gap-2">
+        <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", iconClassName)}>
+          <Icon className="size-4" />
+        </div>
+        <p className="text-sm font-medium text-neutral-500">{label}</p>
+      </div>
+      <p className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">{value}</p>
+    </div>
+  );
+}
+
+// Date | Job # | Customer / Vehicle | Status | Labour | Parts | Total
+const ROW_GRID_CLASS = "grid grid-cols-[100px_110px_minmax(180px,1fr)_150px_110px_110px_120px] gap-3";
+
+export function ServiceReportClient({ initialJobs, initialTotal, initialStats }: { initialJobs: ServiceJobRow[]; initialTotal: number; initialStats: ServiceStats }) {
+  const { preset, customFrom, customTo, data, rangeLabel, isLoading, canReset, setCustomFrom, setCustomTo, handlePresetChange, handleApplyCustom, handleReset } = useReportDateRange<ServiceReportData>(
+    { jobs: initialJobs, total: initialTotal, stats: initialStats },
+    fetchServiceReportAction
+  );
+
+  const SERVICE_COLUMNS: XlsxColumn<ServiceJobRow>[] = [
+    { header: "Date", accessor: (job) => formatDate(job.createdAt) },
+    { header: "Job #", accessor: (job) => job.jobNumber },
+    { header: "Customer", accessor: (job) => job.customerName },
+    { header: "Vehicle", accessor: (job) => job.vehicleNumber },
+    { header: "Status", accessor: (job) => JOB_STATUS_LABELS[job.status] },
+    { header: "Labour", accessor: (job) => job.subtotal },
+    { header: "Parts", accessor: (job) => job.inventoryTotal },
+    { header: "Total", accessor: (job) => job.grandTotal },
+  ];
+
+  function handleDownload() {
+    downloadXlsx(`twinspark-service-report-${todayForFilename()}`, "Service Jobs", SERVICE_COLUMNS, data.jobs);
+  }
+
+  return (
+    <div className="space-y-6">
+      <BackToReports />
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900">Service Report</h1>
+          <p className="mt-1 text-sm text-neutral-500">Job volume, labour revenue, and parts consumed.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <DashboardDateRangeFilter
+            preset={preset}
+            customFrom={customFrom}
+            customTo={customTo}
+            isLoading={isLoading}
+            canReset={canReset}
+            onPresetChange={handlePresetChange}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+            onApplyCustom={handleApplyCustom}
+            onReset={handleReset}
+          />
+          <DownloadXlsxButton onClick={handleDownload} disabled={data.jobs.length === 0} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard icon={CheckCircle2} iconClassName="bg-info-bg text-info" label={`Completed Jobs (${rangeLabel})`} value={data.stats.completedJobCount.toLocaleString("en-IN")} />
+        <StatCard icon={IndianRupee} iconClassName="bg-success-bg text-success" label={`Gross Revenue (${rangeLabel})`} value={formatINR(data.stats.grossCompletedRevenue)} />
+        <StatCard icon={IndianRupee} iconClassName="bg-warning/10 text-warning" label={`Collected Revenue (${rangeLabel})`} value={formatINR(data.stats.collectedRevenue)} />
+      </div>
+
+      <div className="overflow-x-auto">
+        <div role="table" aria-label="Service Report" aria-busy={isLoading} className="min-w-[900px]">
+          <div role="row" className={cn(ROW_GRID_CLASS, "px-4 py-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase")}>
+            <span>Date</span>
+            <span>Job #</span>
+            <span>Customer / Vehicle</span>
+            <span>Status</span>
+            <span>Labour</span>
+            <span>Parts</span>
+            <span className="text-right">Total</span>
+          </div>
+
+          <div className={cn("flex flex-col gap-2", isLoading && "opacity-60 transition-opacity")}>
+            {data.jobs.length === 0 && (
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <Wrench className="size-10 text-neutral-300" />
+                <p className="text-sm text-neutral-500">No service jobs in this period.</p>
+              </div>
+            )}
+
+            {data.jobs.map((job) => (
+              <div key={job.id} role="row" className={cn(ROW_GRID_CLASS, "items-center rounded-[10px] border border-neutral-200 bg-white px-4 py-3 shadow-sm")}>
+                <div role="cell" aria-label="Date" className="min-w-0 text-sm text-neutral-700">
+                  {formatDate(job.createdAt)}
+                </div>
+                <div role="cell" aria-label="Job number" className="min-w-0 truncate font-mono text-sm text-neutral-700">
+                  {job.jobNumber}
+                </div>
+                <div role="cell" aria-label="Customer / Vehicle" className="min-w-0">
+                  <div className="truncate text-neutral-900">{job.customerName}</div>
+                  <div className="truncate font-mono text-[11px] text-neutral-500">{job.vehicleNumber}</div>
+                </div>
+                <div role="cell" aria-label="Status" className="min-w-0">
+                  <ServiceJobStatusBadge status={job.status} />
+                </div>
+                <div role="cell" aria-label="Labour" className="min-w-0 text-sm text-neutral-700">
+                  {formatINR(job.subtotal)}
+                </div>
+                <div role="cell" aria-label="Parts" className="min-w-0 text-sm text-neutral-700">
+                  {formatINR(job.inventoryTotal)}
+                </div>
+                <div role="cell" aria-label="Total" className="min-w-0 text-right text-sm font-semibold text-neutral-900">
+                  {formatINR(job.grandTotal)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {data.total > data.jobs.length && (
+        <p className="text-center text-xs text-neutral-400">
+          Showing the first {data.jobs.length.toLocaleString("en-IN")} of {data.total.toLocaleString("en-IN")} jobs.
+        </p>
+      )}
+    </div>
+  );
+}

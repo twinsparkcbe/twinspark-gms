@@ -1,0 +1,178 @@
+"use client";
+
+import { Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ItemPickerCombobox } from "@/components/purchases/item-picker-combobox";
+import { formatINR } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { InventoryItemRow } from "@/services/inventory";
+
+export interface PartUsedDraft {
+  id: string;
+  inventoryItemId: string | null;
+  quantityUsed: string;
+  /** Combo Offers — which combo brought this part in, if any. */
+  comboId?: string | null;
+  /** Bills at ₹0 because the combo price already covers it. Stock still moves. */
+  includedInCombo?: boolean;
+}
+
+export type PartUsedErrors = Record<string, Record<string, string>>;
+
+// `minmax(0,1fr)`, not `1fr`, for the description column. Every row is its
+// own grid, and a bare `1fr` resolves to `minmax(auto,1fr)` — whose automatic
+// minimum is the content's intrinsic width. A long item name therefore widened
+// that one row's column, so rows disagreed with each other and with the
+// header, and the trailing action buttons were pushed outside the card. A zero
+// minimum makes the column purely a function of container width: identical in
+// every row, and free to truncate.
+// Below md the fixed tracks (436px + 60px of gaps) exceed a phone's width, so
+// `minmax(0,1fr)` collapses to zero and the row overflows the card. Same
+// two-column stack as components/sales/sale-line-items.tsx.
+const ROW_GRID_CLASS =
+  "grid grid-cols-[28px_minmax(0,1fr)] gap-x-3 gap-y-2 md:grid-cols-[28px_minmax(0,1fr)_120px_120px_120px_48px] md:gap-3";
+
+/** Sits in its own column on desktop, stacks under the part name on mobile. */
+const STACKED_CELL = "col-start-2 md:col-start-auto";
+
+/**
+ * Parts/consumables used on the job (doc §4/§9's Service Inventory Usage).
+ *
+ * Rows arrive from `ServiceLinePicker` — searching an inventory item lands
+ * here automatically — or from a catalog entry's Default Items, so the old
+ * "Add Part" button is gone (rework plan Change 1). The per-row combobox
+ * stays, for swapping one item for another without deleting the row.
+ *
+ * Deliberately does NOT call adjust_stock: adding a row is pure data entry
+ * while the job is Draft/In Progress; deduction happens exactly once,
+ * atomically, at completion (doc §6/§7). The "Only N in stock" hint is
+ * advisory and never blocks.
+ */
+export function ServicePartsUsed({
+  parts,
+  items,
+  errors,
+  disabled,
+  onUpdate,
+  onRemove,
+}: {
+  parts: PartUsedDraft[];
+  items: InventoryItemRow[];
+  errors: PartUsedErrors;
+  disabled?: boolean;
+  onUpdate: (id: string, patch: Partial<PartUsedDraft>) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (parts.length === 0) return null;
+
+  return (
+    <div role="table" aria-label="Parts used" className="rounded-[10px] border border-neutral-200">
+      <div
+        role="row"
+        className={cn(
+          ROW_GRID_CLASS,
+          // Column headings mean nothing once the cells stack; each stacked
+          // value carries its own inline label instead.
+          "hidden rounded-t-[10px] border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase md:grid"
+        )}
+      >
+        <span>#</span>
+        <span>Part</span>
+        <span>Quantity</span>
+        <span className="text-right">Price</span>
+        <span className="text-right">Amount</span>
+        <span />
+      </div>
+
+      <div className="divide-y divide-neutral-200 bg-white">
+        {parts.map((part, index) => {
+          const partErrors = errors[part.id] ?? {};
+          const selectedItem = items.find((i) => i.id === part.inventoryItemId) ?? null;
+          const qty = Math.trunc(Number(part.quantityUsed) || 0);
+          const included = part.includedInCombo === true;
+          const amount = selectedItem && !included ? selectedItem.sellingPrice * qty : 0;
+          const exceedsStock = Boolean(selectedItem) && qty > (selectedItem?.availableQuantity ?? 0);
+
+          return (
+            <div key={part.id} role="row" className={cn(ROW_GRID_CLASS, "items-start px-3 py-2.5")}>
+              <div className="flex h-9 items-center text-sm text-neutral-500">{index + 1}</div>
+
+              <div>
+                <ItemPickerCombobox
+                  items={items}
+                  value={part.inventoryItemId}
+                  onChange={(itemId) => onUpdate(part.id, { inventoryItemId: itemId })}
+                  hasError={Boolean(partErrors.inventoryItemId)}
+                  disabled={disabled}
+                />
+                {partErrors.inventoryItemId && <p className="mt-1 text-xs text-danger">{partErrors.inventoryItemId}</p>}
+              </div>
+
+              <div className={STACKED_CELL}>
+                <span className="mb-1 block text-xs text-neutral-400 md:hidden">Quantity</span>
+                <Input
+                  type="number"
+                  min={1}
+                  step="1"
+                  inputMode="numeric"
+                  aria-label="Quantity used"
+                  value={part.quantityUsed}
+                  disabled={disabled}
+                  aria-invalid={Boolean(partErrors.quantityUsed) || undefined}
+                  onChange={(e) => onUpdate(part.id, { quantityUsed: e.target.value })}
+                  className="h-9 text-center"
+                />
+                {partErrors.quantityUsed ? (
+                  <p className="mt-1 text-xs text-danger">{partErrors.quantityUsed}</p>
+                ) : exceedsStock ? (
+                  <p className="mt-1 text-xs text-warning">Only {selectedItem?.availableQuantity} in stock right now</p>
+                ) : null}
+              </div>
+
+              <div
+                className={cn(
+                  STACKED_CELL,
+                  "flex h-9 items-center justify-between text-sm text-neutral-600 md:justify-end"
+                )}
+              >
+                <span className="text-xs text-neutral-400 md:hidden">Price</span>
+                {included ? (
+                  <span className="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">In combo</span>
+                ) : selectedItem ? (
+                  formatINR(selectedItem.sellingPrice)
+                ) : (
+                  "—"
+                )}
+              </div>
+              <div
+                className={cn(
+                  STACKED_CELL,
+                  "flex h-9 items-center justify-between text-sm font-semibold text-neutral-900 md:justify-end"
+                )}
+              >
+                <span className="text-xs font-normal text-neutral-400 md:hidden">Amount</span>
+                {formatINR(amount)}
+              </div>
+
+              <div className={cn(STACKED_CELL, "flex h-9 items-center justify-start md:justify-end")}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  aria-label="Remove part"
+                  disabled={disabled}
+                  onClick={() => onRemove(part.id)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
