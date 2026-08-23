@@ -36,15 +36,16 @@ export function DailySummaryStrip({ summary }: { summary: DailySummary }) {
     <div className="flex flex-wrap items-center divide-x divide-neutral-200 overflow-hidden rounded-[12px] border border-neutral-200 bg-white shadow-sm">
       <Stat label="Employees" value={summary.totalEmployees} />
       <Stat label="Present" value={summary.present} dotClass="bg-success" valueClass="text-success" />
-      <Stat label="Full Day" value={summary.fullDay} dotClass="bg-success/60" />
-      <Stat label="First Half" value={summary.firstHalf} dotClass="bg-info" />
-      <Stat label="Second Half" value={summary.secondHalf} dotClass="bg-channel-purple" />
       <Stat
         label="Absent"
         value={summary.absent}
         dotClass="bg-danger"
         valueClass={summary.absent > 0 ? "text-danger" : undefined}
       />
+      <Stat label="Full Day" value={summary.fullDay} dotClass="bg-success/60" />
+      <Stat label="First Half" value={summary.firstHalf} dotClass="bg-info" />
+      <Stat label="Second Half" value={summary.secondHalf} dotClass="bg-channel-purple" />
+
       {/* Only while there's still work to do — once the day is fully marked
           this disappears rather than sitting there reading zero. */}
       {summary.unmarked > 0 && (
