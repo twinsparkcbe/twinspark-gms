@@ -33,6 +33,19 @@ describe("resolveActiveHref", () => {
     expect(resolveActiveHref("/login", NAV_ITEMS)).toBeNull();
   });
 
+  /**
+   * Attendance ships one sidebar entry with its sub-screens as child routes
+   * (/attendance/employees, /attendance/reports). The single nav item has to
+   * stay lit on all of them, or the sidebar looks like you've navigated out
+   * of the module.
+   */
+  it("keeps the single Attendance nav item active across its child routes", () => {
+    expect(resolveActiveHref("/attendance", NAV_ITEMS)).toBe("/attendance");
+    expect(resolveActiveHref("/attendance/employees", NAV_ITEMS)).toBe("/attendance");
+    expect(resolveActiveHref("/attendance/employees/abc-123", NAV_ITEMS)).toBe("/attendance");
+    expect(resolveActiveHref("/attendance/reports", NAV_ITEMS)).toBe("/attendance");
+  });
+
   it("does not treat a sibling with a shared prefix as a child route", () => {
     // "/settings/users" must not light up for "/settings/users-archive".
     const items = [

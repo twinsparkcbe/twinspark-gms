@@ -56,7 +56,19 @@ describe("canAccessModule — coverage", () => {
         expect(typeof canAccessModule(role, moduleKey)).toBe("boolean");
       }
     }
-    expect(ALL_MODULE_KEYS).toHaveLength(10);
+    expect(ALL_MODULE_KEYS).toHaveLength(11);
+  });
+
+  /**
+   * Attendance Management (0031) is Admin-only. It gets its access for free
+   * from `admin: ALL_MODULE_KEYS`, so the risk isn't Admin losing it — it's
+   * a future edit to SHARED_STAFF_MODULES quietly handing staff attendance
+   * to the people it records. This test is what would catch that.
+   */
+  it("keeps Attendance Admin-only", () => {
+    expect(canAccessModule("admin", "attendance")).toBe(true);
+    expect(canAccessModule("sales_person", "attendance")).toBe(false);
+    expect(canAccessModule("mechanic", "attendance")).toBe(false);
   });
 });
 
