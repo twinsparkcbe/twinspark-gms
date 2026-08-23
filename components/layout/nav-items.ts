@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Boxes,
+  CalendarCheck,
   ClipboardList,
   Globe,
   LayoutDashboard,
@@ -43,6 +44,12 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Customers & Vehicles", href: "/customers", icon: Users, moduleKey: "customers" },
   { label: "Online Orders", href: "/online-orders", icon: Globe, moduleKey: "online-orders" },
   { label: "Reports", href: "/reports", icon: BarChart3, moduleKey: "reports" },
+  // Attendance Management — one nav entry, not three. Daily Attendance /
+  // Employees / Reports are child routes of /attendance rendered behind a tab
+  // bar (app/(app)/attendance/layout.tsx), so resolveActiveHref below already
+  // highlights this single item for all of them. Deliberately sits between
+  // Reports and Settings: it is a daily-use screen, not configuration.
+  { label: "Attendance", href: "/attendance", icon: CalendarCheck, moduleKey: "attendance" },
   { label: "Settings / Users", href: "/settings/users", icon: Settings, moduleKey: "settings" },
   // Payment QR Config (doc/payment-qr-config-scope.md) — same moduleKey as
   // Settings / Users, so it inherits the identical Admin-only gate with no

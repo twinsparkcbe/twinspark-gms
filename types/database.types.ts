@@ -75,9 +75,102 @@ export type ServiceJobEventType =
 export type ServiceImageType = "BEFORE" | "AFTER";
 export type UserRoleEnum = "admin" | "sales_person" | "mechanic";
 
+/**
+ * Attendance Management (0031) — a standalone module with its own employee
+ * roster. `AttendanceRole` is deliberately separate from `UserRoleEnum`
+ * above: that one is about who can log in, this one is about what a person
+ * does on the shop floor. They must be free to diverge.
+ */
+export type AttendanceRole = "SALES_PERSON" | "SERVICE_PERSON" | "OTHER_STAFF";
+export type AttendanceStatus = "FULL_DAY" | "FIRST_HALF" | "SECOND_HALF" | "ABSENT";
+
 export interface Database {
   public: {
     Tables: {
+      attendance_employees: {
+        Row: {
+          id: string;
+          employee_code: string;
+          name: string;
+          role: AttendanceRole;
+          /** Set only when role is OTHER_STAFF; null otherwise (DB CHECK). */
+          other_role_description: string | null;
+          mobile: string | null;
+          joining_date: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          /** Optional — the DB issues "001", "002", ... from a sequence. */
+          employee_code?: string;
+          name: string;
+          role: AttendanceRole;
+          other_role_description?: string | null;
+          mobile?: string | null;
+          joining_date: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          employee_code?: string;
+          name?: string;
+          role?: AttendanceRole;
+          other_role_description?: string | null;
+          mobile?: string | null;
+          joining_date?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      attendance_records: {
+        Row: {
+          id: string;
+          employee_id: string;
+          attendance_date: string;
+          status: AttendanceStatus;
+          /** "HH:MM:SS" — a plain wall-clock time, not an instant. */
+          check_in: string | null;
+          check_out: string | null;
+          /** Generated column — read-only, never present on Insert/Update. */
+          working_minutes: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          employee_id: string;
+          attendance_date: string;
+          status: AttendanceStatus;
+          check_in?: string | null;
+          check_out?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          employee_id?: string;
+          attendance_date?: string;
+          status?: AttendanceStatus;
+          check_in?: string | null;
+          check_out?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attendance_records_employee_id_fkey";
+            columns: ["employee_id"];
+            referencedRelation: "attendance_employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       payment_qr_configs: {
         Row: {
           id: string;
@@ -1667,6 +1760,8 @@ export interface Database {
       stock_movement_reason: StockMovementReason;
       online_order_status: OnlineOrderStatus;
       user_role: UserRoleEnum;
+      attendance_role: AttendanceRole;
+      attendance_status: AttendanceStatus;
     };
     CompositeTypes: Record<string, never>;
   };

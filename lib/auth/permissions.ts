@@ -24,7 +24,10 @@ export type ModuleKey =
   | "customers"
   | "online-orders"
   | "reports"
-  | "settings";
+  | "settings"
+  /** Attendance Management (0031) — standalone staff-attendance module,
+   * Admin-only. Carries no relationship to any business workflow. */
+  | "attendance";
 
 export const ALL_MODULE_KEYS: readonly ModuleKey[] = [
   "dashboard",
@@ -37,6 +40,7 @@ export const ALL_MODULE_KEYS: readonly ModuleKey[] = [
   "online-orders",
   "reports",
   "settings",
+  "attendance",
 ] as const;
 
 const SHARED_STAFF_MODULES: ModuleKey[] = ["sales", "billing", "customers", "online-orders"];
