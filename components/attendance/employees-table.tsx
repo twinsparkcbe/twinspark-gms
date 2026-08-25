@@ -5,7 +5,7 @@ import { FileBarChart, Pencil, Power, PowerOff, Users as UsersIcon } from "lucid
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatINR } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AttendanceEmployeeRow } from "@/services/attendance/types";
 
@@ -13,7 +13,7 @@ import { AttendanceRoleBadge } from "./attendance-badges";
 
 // Employee ID | Name | Role | Mobile | Joining Date | Status | Actions
 const ROW_GRID_CLASS =
-  "grid grid-cols-[110px_minmax(150px,1fr)_150px_130px_120px_100px_130px] gap-3";
+  "grid grid-cols-[100px_minmax(140px,1fr)_140px_120px_115px_105px_95px_125px] gap-3";
 
 export function EmployeesTable({
   employees,
@@ -28,7 +28,7 @@ export function EmployeesTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <div role="table" aria-label="Attendance employees" className="min-w-[960px]">
+      <div role="table" aria-label="Attendance employees" className="min-w-[1040px]">
         <div
           role="row"
           className={cn(ROW_GRID_CLASS, "px-4 py-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase")}
@@ -37,6 +37,7 @@ export function EmployeesTable({
           <span>Name</span>
           <span>Role</span>
           <span>Mobile</span>
+          <span className="text-right">Salary / Day</span>
           <span>Joined</span>
           <span>Status</span>
           <span className="text-right">Actions</span>
@@ -81,6 +82,15 @@ export function EmployeesTable({
 
               <div role="cell" aria-label="Mobile" className="min-w-0 truncate font-mono text-[13px] text-neutral-600">
                 {employee.mobile ?? "—"}
+              </div>
+
+              {/* A dash, never Rs 0 — "no rate recorded" is not "earns nothing". */}
+              <div role="cell" aria-label="Salary per day" className="min-w-0 text-right text-sm">
+                {employee.dailyWage != null ? (
+                  <span className="font-mono font-semibold text-neutral-900">{formatINR(employee.dailyWage)}</span>
+                ) : (
+                  <span className="text-neutral-300">&mdash;</span>
+                )}
               </div>
 
               <div role="cell" aria-label="Joining date" className="min-w-0 text-sm text-neutral-500">

@@ -11,6 +11,7 @@ function employee(overrides: Partial<AttendanceEmployeeRow> = {}): AttendanceEmp
     name: "Arun",
     role: "SALES_PERSON",
     otherRoleDescription: null,
+    dailyWage: 600,
     mobile: "9876543210",
     joiningDate: "2026-01-01",
     isActive: true,

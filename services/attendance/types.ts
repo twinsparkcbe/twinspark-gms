@@ -11,6 +11,8 @@ export interface AttendanceEmployeeRow {
   /** Who an OTHER_STAFF member actually is ("Watchman", "Accountant").
    * Always null for the other two roles — enforced by a DB CHECK. */
   otherRoleDescription: string | null;
+  /** Per-day wage. Null means no rate recorded — never zero. */
+  dailyWage: number | null;
   mobile: string | null;
   /** "YYYY-MM-DD" */
   joiningDate: string;
@@ -31,6 +33,11 @@ export interface AttendanceRecordRow {
   checkIn: string | null;
   checkOut: string | null;
   workingMinutes: number;
+  /** The wage in force when this record was first saved — frozen, so a
+   * later raise can't rewrite what a past month says was earned. */
+  dailyWage: number | null;
+  /** DB-generated from status + dailyWage. Null when unpriced. */
+  payableAmount: number | null;
 }
 
 /**

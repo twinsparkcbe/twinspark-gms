@@ -6,7 +6,7 @@ import { ArrowLeft, CalendarX } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatINR } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { downloadXlsx, todayForFilename, type XlsxColumn } from "@/lib/xlsx-export";
 import { ATTENDANCE_STATUS_LABELS, roleDisplayLabel } from "@/services/attendance/schemas";
@@ -22,7 +22,7 @@ import { DownloadXlsxButton } from "@/components/reports/download-xlsx-button";
 import { AttendanceTotalsStrip } from "./attendance-totals-strip";
 
 // Date | Status | Check In | Check Out | Working Hours
-const ROW_GRID_CLASS = "grid grid-cols-[140px_150px_120px_120px_minmax(120px,1fr)] gap-3";
+const ROW_GRID_CLASS = "grid grid-cols-[130px_140px_110px_110px_minmax(100px,1fr)_120px] gap-3";
 
 export function EmployeeReportClient({
   employee: initialEmployee,
@@ -91,6 +91,8 @@ export function EmployeeReportClient({
     { header: "Check In", accessor: (record) => record.checkIn ?? "" },
     { header: "Check Out", accessor: (record) => record.checkOut ?? "" },
     { header: "Working Hours", accessor: (record) => formatWorkingHours(record.workingMinutes) },
+    { header: "Rate", accessor: (record) => record.dailyWage ?? "" },
+    { header: "Salary", accessor: (record) => record.payableAmount ?? "" },
   ];
 
   function handleDownload() {
@@ -122,6 +124,7 @@ export function EmployeeReportClient({
           <p className="mt-0.5 font-mono text-xs font-bold text-neutral-500">
             {employee.employeeCode}
             {employee.mobile ? ` · ${employee.mobile}` : ""}
+            {employee.dailyWage != null ? ` · ${formatINR(employee.dailyWage)}/day` : " · no rate set"}
           </p>
         </div>
         <DownloadXlsxButton onClick={handleDownload} disabled={records.length === 0} />
@@ -148,7 +151,7 @@ export function EmployeeReportClient({
 
       <div className="rounded-[14px] border border-neutral-200 bg-white p-4 shadow-sm">
         <div className="overflow-x-auto">
-          <div role="table" aria-label={`Attendance for ${employee.name}`} aria-busy={isLoading} className="min-w-[700px]">
+          <div role="table" aria-label={`Attendance for ${employee.name}`} aria-busy={isLoading} className="min-w-[820px]">
             <div
               role="row"
               className={cn(ROW_GRID_CLASS, "px-4 py-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase")}
@@ -186,8 +189,13 @@ export function EmployeeReportClient({
                   <div role="cell" aria-label="Check out" className="min-w-0 font-mono text-sm text-neutral-700">
                     {record.checkOut ?? "—"}
                   </div>
-                  <div role="cell" aria-label="Working hours" className="min-w-0 text-right font-mono text-sm font-bold text-neutral-900">
+                  <div role="cell" aria-label="Working hours" className="min-w-0 text-right font-mono text-sm text-neutral-700">
                     {record.status === "ABSENT" ? "—" : formatWorkingHours(record.workingMinutes)}
+                  </div>
+                  {/* The rate snapshotted on THIS record, so a later raise
+                      never changes what a past day shows. */}
+                  <div role="cell" aria-label="Salary" className="min-w-0 text-right font-mono text-sm font-bold text-neutral-900">
+                    {record.payableAmount != null ? formatINR(record.payableAmount) : <span className="text-neutral-300">—</span>}
                   </div>
                 </div>
               ))}

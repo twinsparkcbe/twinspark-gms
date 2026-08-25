@@ -16,8 +16,10 @@ system. Nothing else.
 - `services/attendance/*` imports nothing from `services/{sales,service,
   inventory,purchases,online-orders,users,payments,reports,dashboard}`.
 - Nothing outside the module imports it, reads its tables, or writes them.
-- Its reports live at `/attendance/reports`, deliberately **not** as a card
-  on the `/reports` grid.
+- Its reports live at `/attendance/reports`. The `/reports` grid links to
+  that page (added 2026-08-25 on request) — a `<Link>` only, so no data,
+  service or type crosses between the two modules. Both sides carry the same
+  Admin-only gate.
 
 Attendance keeps its **own employee roster** rather than reusing `profiles`.
 The people whose attendance is marked are not the same set as the people who
@@ -113,6 +115,26 @@ components/attendance/*.tsx                        (+ 1 test file)
 Three existing files modified, by addition only: `lib/auth/permissions.ts`
 (+1 ModuleKey), `components/layout/nav-items.ts` (+1 nav entry),
 `types/database.types.ts` (+2 tables, +2 enums).
+
+## 4b. Per-day wage (0033_attendance_salary.sql)
+
+`attendance_employees.daily_wage` holds the rate; each record snapshots it as
+`attendance_records.daily_wage`, and `payable_amount` is generated from
+status + that snapshot — the same technique as `working_minutes`, so no
+salary figure is ever typed in by hand.
+
+| Decision | Choice |
+| --- | --- |
+| Historical accuracy | The rate is **snapshotted onto each record when first saved and never refreshed**. A raise in October cannot rewrite what August's report says was earned — same reasoning as 0012 refusing to let an older purchase batch reprice today's stock. Editing an old record re-derives the amount at that record's own frozen rate. |
+| Half day | Exactly 50%, for both First Half and Second Half. Absent pays 0. Not configurable. |
+| Hours | Never affect pay. A Full Day pays a full day whether it ran seven hours or ten. |
+| No rate recorded | `payable_amount` is **null for every status, absences included** — so "no rate on file" can never be mistaken for "earned nothing". Reports show a dash and count the day as unpriced rather than totalling a wage bill that silently omits people. |
+| Where it shows | Employee form, Employees table, both reports (Payable Days + Salary), the individual report's per-day rows and footer, and the XLSX exports. Deliberately **not** on Daily Attendance — that screen is built for speed. |
+
+**This is not payroll.** It produces an indicative wage figure from attendance
+only: no deductions, advances, overtime, bonuses, PF/ESI, leave encashment or
+payslips. Salary is Admin-only by virtue of the whole module being Admin-only
+— if Attendance is ever opened to other roles, these columns must stay gated.
 
 ## 5. Out of scope
 

@@ -1,5 +1,6 @@
 import type { AttendanceStatus } from "@/types/database.types";
 
+import { summarizeSalary, type SalaryTotals } from "./salary";
 import type { AttendanceRecordRow, AttendanceRecordWithEmployee, DailyAttendanceRow } from "./types";
 
 /**
@@ -68,7 +69,7 @@ export function deriveDailySummary(rows: DailyAttendanceRow[]): DailySummary {
   return summary;
 }
 
-export interface AttendanceTotals {
+export interface AttendanceTotals extends SalaryTotals {
   /** Days with any record at all — present days plus absent days. */
   recordedDays: number;
   /** Days actually worked (full + first half + second half). */
@@ -85,6 +86,9 @@ export interface AttendanceTotals {
 }
 
 const EMPTY_TOTALS: AttendanceTotals = {
+  payableDays: 0,
+  salaryPayable: 0,
+  unpricedDays: 0,
   recordedDays: 0,
   workingDays: 0,
   fullDays: 0,
@@ -126,6 +130,10 @@ export function summarizeAttendance(records: readonly AttendanceRecordRow[]): At
 
   totals.averageWorkingMinutes =
     totals.workingDays > 0 ? Math.round(totals.totalWorkingMinutes / totals.workingDays) : 0;
+
+  // Wage arithmetic lives in salary.ts so the same rule serves the reports,
+  // the totals strip, and the DB's generated column.
+  Object.assign(totals, summarizeSalary(records));
 
   return totals;
 }

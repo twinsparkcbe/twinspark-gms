@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatDate, MONTH_ABBR } from "@/lib/format";
+import { formatDate, formatINR, MONTH_ABBR } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { downloadXlsxWorkbook, toSheetData, todayForFilename, type XlsxColumn } from "@/lib/xlsx-export";
 import { ATTENDANCE_ROLE_LABELS, ATTENDANCE_ROLES, roleDisplayLabel } from "@/services/attendance/schemas";
@@ -18,6 +18,7 @@ import {
   type EmployeeAttendanceSummary,
 } from "@/services/attendance/summary";
 import type { AttendanceEmployeeRow, AttendanceRecordWithEmployee } from "@/services/attendance/types";
+import { formatPayableDays } from "@/services/attendance/salary";
 import { formatTotalHours } from "@/services/attendance/working-hours";
 import type { AttendanceRole } from "@/types/database.types";
 
@@ -43,7 +44,10 @@ function shortMonthLabel(monthKey: string): string {
 }
 
 // Employee | Role | Working Days | Full | First Half | Second Half | Absent | Total Hours
-const ROW_GRID_CLASS = "grid grid-cols-[minmax(150px,1fr)_140px_90px_70px_90px_100px_80px_110px] gap-3";
+// ...Payable Days and Salary appended. Salary is deliberately last and
+// right-aligned: it's the figure the owner scans down the column for.
+const ROW_GRID_CLASS =
+  "grid grid-cols-[minmax(140px,1fr)_120px_80px_60px_75px_85px_70px_95px_90px_115px] gap-2.5";
 
 function SummaryTable({
   summaries,
@@ -71,6 +75,8 @@ function SummaryTable({
           <span className="text-right">Second Half</span>
           <span className="text-right">Absent</span>
           <span className="text-right">Total Hours</span>
+          <span className="text-right">Payable Days</span>
+          <span className="text-right">Salary</span>
         </div>
 
         <div className={cn("flex flex-col gap-2", isLoading && "opacity-60 transition-opacity")}>
@@ -114,8 +120,29 @@ function SummaryTable({
               <div role="cell" aria-label="Absent days" className={cn("text-right text-sm", summary.absentDays > 0 ? "font-semibold text-danger" : "text-neutral-700")}>
                 {summary.absentDays}
               </div>
-              <div role="cell" aria-label="Total hours" className="text-right font-mono text-sm font-bold text-neutral-900">
+              <div role="cell" aria-label="Total hours" className="text-right font-mono text-sm text-neutral-700">
                 {formatTotalHours(summary.totalWorkingMinutes)}
+              </div>
+              <div role="cell" aria-label="Payable days" className="text-right text-sm font-semibold text-neutral-900">
+                {formatPayableDays(summary.payableDays)}
+              </div>
+              {/* Unpriced worked days are excluded from the sum, so the cell
+                  says so instead of quietly under-reporting the wage bill. */}
+              <div role="cell" aria-label="Salary" className="text-right font-mono text-sm font-bold text-neutral-900">
+                {summary.payableDays > 0 && summary.unpricedDays === summary.payableDays ? (
+                  <span className="font-sans text-xs font-medium text-neutral-400" title="No salary per day recorded for this employee">
+                    no rate set
+                  </span>
+                ) : (
+                  <>
+                    {formatINR(summary.salaryPayable)}
+                    {summary.unpricedDays > 0 && (
+                      <span className="block text-[10px] font-medium text-warning" title="Some worked days have no rate recorded">
+                        +{summary.unpricedDays} unpriced
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -210,6 +237,9 @@ export function AttendanceReportsClient({
     { header: "Absent", accessor: (row) => row.absentDays },
     { header: "Total Hours", accessor: (row) => formatTotalHours(row.totalWorkingMinutes) },
     { header: "Average Hours", accessor: (row) => formatTotalHours(row.averageWorkingMinutes) },
+    { header: "Payable Days", accessor: (row) => row.payableDays },
+    { header: "Salary", accessor: (row) => (row.unpricedDays === row.payableDays && row.payableDays > 0 ? "" : row.salaryPayable) },
+    { header: "Unpriced Days", accessor: (row) => row.unpricedDays },
   ];
 
   function handleDownload() {
