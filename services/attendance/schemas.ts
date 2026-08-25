@@ -67,6 +67,18 @@ export const attendanceEmployeeInputSchema = z
       .transform((value) => (value === "" ? null : value))
       .nullable()
       .default(null),
+    // Optional: staff may legitimately have no rate recorded. Coerced from
+    // the form's string, and an empty field means "not recorded" (null), NOT
+    // zero — a zero wage would claim the person earns nothing.
+    dailyWage: z
+      .union([z.string(), z.number(), z.null(), z.undefined()])
+      .transform((value) => {
+        if (value === null || value === undefined || String(value).trim() === "") return null;
+        return Number(value);
+      })
+      .refine((value) => value === null || (Number.isFinite(value) && value > 0), {
+        message: "Salary per day must be greater than 0",
+      }),
     mobile: optionalMobileSchema,
     joiningDate: ymdSchema,
     isActive: z.boolean().default(true),

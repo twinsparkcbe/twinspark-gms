@@ -95,6 +95,8 @@ export interface Database {
           role: AttendanceRole;
           /** Set only when role is OTHER_STAFF; null otherwise (DB CHECK). */
           other_role_description: string | null;
+          /** Per-day wage. Null = no rate recorded (never means zero). */
+          daily_wage: number | null;
           mobile: string | null;
           joining_date: string;
           is_active: boolean;
@@ -108,6 +110,7 @@ export interface Database {
           name: string;
           role: AttendanceRole;
           other_role_description?: string | null;
+          daily_wage?: number | null;
           mobile?: string | null;
           joining_date: string;
           is_active?: boolean;
@@ -120,6 +123,7 @@ export interface Database {
           name?: string;
           role?: AttendanceRole;
           other_role_description?: string | null;
+          daily_wage?: number | null;
           mobile?: string | null;
           joining_date?: string;
           is_active?: boolean;
@@ -139,6 +143,10 @@ export interface Database {
           check_out: string | null;
           /** Generated column — read-only, never present on Insert/Update. */
           working_minutes: number;
+          /** The wage in force when this record was first saved. */
+          daily_wage: number | null;
+          /** Generated from status + daily_wage. Null when unpriced. */
+          payable_amount: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -149,6 +157,7 @@ export interface Database {
           status: AttendanceStatus;
           check_in?: string | null;
           check_out?: string | null;
+          daily_wage?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -159,6 +168,7 @@ export interface Database {
           status?: AttendanceStatus;
           check_in?: string | null;
           check_out?: string | null;
+          daily_wage?: number | null;
           created_at?: string;
           updated_at?: string;
         };

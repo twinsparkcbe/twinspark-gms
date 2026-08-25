@@ -1,4 +1,4 @@
-import { Boxes, FileText, Globe, IndianRupee, PhoneCall, Receipt, ShoppingCart, TrendingUp, Wallet, Wrench } from "lucide-react";
+import { Boxes, CalendarCheck, FileText, Globe, IndianRupee, PhoneCall, Receipt, ShoppingCart, TrendingUp, Wallet, Wrench } from "lucide-react";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 
@@ -29,6 +29,12 @@ export default async function ReportsPage() {
         <ReportCard href="/reports/gst" icon={FileText} title="GST Report" description="Every Sale and Service Job billed with GST — taxable value, rate, and tax collected, for filing." />
         <ReportCard href="/reports/profit" icon={IndianRupee} title="Profit Report" description="Sales Amount minus actual Cost of Goods Sold, trended over time." />
         <ReportCard href="/reports/online-orders" icon={Globe} title="Online Orders Report" description="Track Tyre online channel volume, dispatch, and rejections." />
+        {/* Attendance lives in its own module and this is only a link to it —
+            no data, service or type crosses between the two. Listed here
+            because "where are my reports" is the question this page answers,
+            and an admin shouldn't have to know which module owns which
+            report. Same Admin-only gate on both sides. */}
+        <ReportCard href="/attendance/reports" icon={CalendarCheck} title="Attendance Report" description="Days worked, half days, absences, and salary payable per employee, over any date range." />
       </div>
     </div>
   );

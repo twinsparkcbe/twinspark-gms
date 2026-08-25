@@ -43,7 +43,7 @@ export class AttendanceEmployeeNotFoundError extends Error {
 type EmployeeDbRow = Database["public"]["Tables"]["attendance_employees"]["Row"];
 
 const SELECT_COLUMNS =
-  "id, employee_code, name, role, other_role_description, mobile, joining_date, is_active, created_at, updated_at";
+  "id, employee_code, name, role, other_role_description, daily_wage, mobile, joining_date, is_active, created_at, updated_at";
 
 /** Postgres unique_violation — the case-insensitive employee-code index. */
 const UNIQUE_VIOLATION = "23505";
@@ -55,6 +55,7 @@ export function mapEmployeeRow(row: EmployeeDbRow): AttendanceEmployeeRow {
     name: row.name,
     role: row.role,
     otherRoleDescription: row.other_role_description,
+    dailyWage: row.daily_wage,
     mobile: row.mobile,
     joiningDate: row.joining_date,
     isActive: row.is_active,
@@ -133,6 +134,7 @@ export async function createAttendanceEmployee(
       name: input.name,
       role: input.role,
       other_role_description: input.otherRoleDescription,
+      daily_wage: input.dailyWage,
       mobile: input.mobile,
       joining_date: input.joiningDate,
       is_active: input.isActive,
@@ -161,6 +163,9 @@ export async function updateAttendanceEmployee(
       name: input.name,
       role: input.role,
       other_role_description: input.otherRoleDescription,
+      // Changing this affects future records only — every record already
+      // saved keeps the rate snapshotted onto it (0033).
+      daily_wage: input.dailyWage,
       mobile: input.mobile,
       joining_date: input.joiningDate,
       is_active: input.isActive,

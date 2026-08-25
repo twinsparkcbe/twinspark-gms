@@ -11,6 +11,7 @@
  * plain RLS-scoped client, never straight from components.
  */
 export * from "./employees";
+export * from "./input-masks";
 export * from "./ist-today";
 export * from "./records";
 export * from "./schemas";

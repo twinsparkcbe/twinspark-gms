@@ -17,6 +17,7 @@ function employee(overrides: Partial<AttendanceEmployeeRow> = {}): AttendanceEmp
     name: "Arun",
     role: "SALES_PERSON",
     otherRoleDescription: null,
+    dailyWage: 600,
     mobile: null,
     joiningDate: "2026-01-01",
     isActive: true,
@@ -35,6 +36,8 @@ function record(overrides: Partial<AttendanceRecordRow> = {}): AttendanceRecordR
     checkIn: "09:10",
     checkOut: "18:15",
     workingMinutes: 545,
+    dailyWage: 600,
+    payableAmount: 600,
     ...overrides,
   };
 }
@@ -211,5 +214,47 @@ describe("month helpers", () => {
         joined({ attendanceDate: "2026-08-19" }),
       ])
     ).toEqual(["2026-09", "2026-08", "2026-07"]);
+  });
+});
+
+/**
+ * Salary rolls up through the same totals every other figure uses, so the
+ * employee report footer and the Reports table can never disagree.
+ */
+describe("salary in the attendance totals", () => {
+  it("adds payable days and salary to a per-employee summary", () => {
+    const summaries = summarizeByEmployee([
+      joined({ employeeId: "e1", status: "FULL_DAY", dailyWage: 600, payableAmount: 600 }),
+      joined({ employeeId: "e1", attendanceDate: "2026-08-19", status: "FIRST_HALF", dailyWage: 600, payableAmount: 300 }),
+      joined({ employeeId: "e1", attendanceDate: "2026-08-20", status: "ABSENT", checkIn: null, checkOut: null, workingMinutes: 0, dailyWage: 600, payableAmount: 0 }),
+    ]);
+
+    expect(summaries[0].payableDays).toBe(1.5);
+    expect(summaries[0].salaryPayable).toBe(900);
+    expect(summaries[0].unpricedDays).toBe(0);
+  });
+
+  /**
+   * The reason the rate is snapshotted per record rather than read off the
+   * employee: a raise must not reprice the days worked before it.
+   */
+  it("prices each day at the rate stored on that day's record", () => {
+    const totals = summarizeAttendance([
+      record({ attendanceDate: "2026-08-01", dailyWage: 500, payableAmount: 500 }),
+      record({ attendanceDate: "2026-08-02", dailyWage: 500, payableAmount: 500 }),
+      record({ attendanceDate: "2026-09-01", dailyWage: 700, payableAmount: 700 }),
+    ]);
+    expect(totals.salaryPayable).toBe(1700);
+  });
+
+  it("reports an employee with no rate as unpriced rather than as earning zero", () => {
+    const totals = summarizeAttendance([
+      record({ status: "FULL_DAY", dailyWage: null, payableAmount: null }),
+      record({ attendanceDate: "2026-08-19", status: "FULL_DAY", dailyWage: null, payableAmount: null }),
+    ]);
+
+    expect(totals.payableDays).toBe(2);
+    expect(totals.salaryPayable).toBe(0);
+    expect(totals.unpricedDays).toBe(2);
   });
 });
