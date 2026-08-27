@@ -1,3 +1,4 @@
+import { canSellBelowCost } from "@/lib/auth/permissions";
 import { requireSalesAccess } from "@/lib/auth/require-sales-access";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -16,7 +17,7 @@ import { NewSalePageClient } from "@/components/sales/new-sale-page-client";
 // ever offers products and Tyre Fitting, so this page no longer fetches the
 // sellable-combos list. See services/sales/picker.ts.
 export default async function NewSalePage() {
-  const { userId } = await requireSalesAccess();
+  const { userId, role } = await requireSalesAccess();
   const supabase = await createClient();
 
   const [items, customers, usageCounts, salespeople] = await Promise.all([
@@ -43,6 +44,7 @@ export default async function NewSalePage() {
       // recorded by the person who made it.
       defaultSoldById={userId}
       todayLabel={todayLabel}
+      canSellBelowCost={canSellBelowCost(role)}
     />
   );
 }

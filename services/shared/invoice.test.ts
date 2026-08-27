@@ -32,7 +32,9 @@ function productLine(overrides: Partial<SaleLineItemRow> = {}): SaleLineItemRow 
     comboListValue: null,
     includedInCombo: false,
     lineTotal: 3000,
-    returnedQuantity: 0,
+    listPrice: null,
+  discountGiven: 0,
+  returnedQuantity: 0,
     ...overrides,
   };
 }
@@ -58,7 +60,9 @@ function tyreFittingLine(overrides: Partial<SaleLineItemRow> = {}): SaleLineItem
     comboListValue: null,
     includedInCombo: false,
     lineTotal: 600,
-    returnedQuantity: 0,
+    listPrice: null,
+  discountGiven: 0,
+  returnedQuantity: 0,
     ...overrides,
   };
 }
@@ -84,7 +88,9 @@ function customLine(overrides: Partial<SaleLineItemRow> = {}): SaleLineItemRow {
     comboListValue: null,
     includedInCombo: false,
     lineTotal: 250,
-    returnedQuantity: 0,
+    listPrice: null,
+  discountGiven: 0,
+  returnedQuantity: 0,
     ...overrides,
   };
 }
@@ -446,7 +452,9 @@ describe("buildSalesInvoiceView — combos and payment", () => {
       comboListValue: 7000,
       includedInCombo: false,
       lineTotal: 5999,
-      returnedQuantity: 0,
+      listPrice: null,
+  discountGiven: 0,
+  returnedQuantity: 0,
       ...overrides,
     };
   }

@@ -211,6 +211,9 @@ export function OnlineOrdersTable({
                   trailing={
                     <div className="flex flex-col items-end gap-1.5">
                       <span className="text-sm font-bold text-neutral-900">{formatINR(order.totalAmount)}</span>
+                      {order.amountIsOverridden && (
+                        <span className="text-[11px] text-warning">Quoted · ours {formatINR(order.computedAmount)}</span>
+                      )}
                       <OnlineOrderStatusBadge status={order.status} />
                     </div>
                   }
@@ -313,6 +316,18 @@ export function OnlineOrdersTable({
 
                   <div role="cell" aria-label="Amount" className="min-w-0">
                     <span className="text-sm font-semibold text-neutral-900">{formatINR(order.totalAmount)}</span>
+                    {/* Flags an order whose amount the customer entered
+                        themselves, so it is visible while scanning the list
+                        rather than only after opening the screenshot
+                        (0036_online_order_amount_override.sql). */}
+                    {order.amountIsOverridden && (
+                      <p
+                        className="truncate text-[11px] text-warning"
+                        title={`Customer-quoted amount — our price is ${formatINR(order.computedAmount)}`}
+                      >
+                        Quoted · ours {formatINR(order.computedAmount)}
+                      </p>
+                    )}
                   </div>
 
                   <div role="cell" aria-label="Status" className="min-w-0">

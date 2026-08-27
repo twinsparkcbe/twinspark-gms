@@ -1264,7 +1264,11 @@ export interface Database {
           payment_screenshot_path: string;
           unit_price_front: number | null;
           unit_price_back: number | null;
+          computed_amount: number;
           total_amount: number;
+          /** Generated (0036) — true when the customer entered an amount that
+           * differs from the catalogue-computed one. Never writable. */
+          amount_is_overridden: boolean;
           status: OnlineOrderStatus;
           rejection_reason: string | null;
           submitted_at: string;
@@ -1289,6 +1293,7 @@ export interface Database {
           payment_screenshot_path: string;
           unit_price_front?: number | null;
           unit_price_back?: number | null;
+          computed_amount?: number;
           total_amount?: number;
           status?: OnlineOrderStatus;
           rejection_reason?: string | null;
@@ -1314,6 +1319,7 @@ export interface Database {
           payment_screenshot_path?: string;
           unit_price_front?: number | null;
           unit_price_back?: number | null;
+          computed_amount?: number;
           total_amount?: number;
           status?: OnlineOrderStatus;
           rejection_reason?: string | null;
@@ -1737,6 +1743,9 @@ export interface Database {
           p_quantity_front: number;
           p_quantity_back: number;
           p_payment_screenshot_path: string;
+          /** Optional (0036) — the amount the customer was quoted. Omitted
+           * means "charge the catalogue price". */
+          p_quoted_amount?: number | null;
         };
         Returns: string;
       };

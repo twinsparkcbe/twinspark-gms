@@ -39,7 +39,7 @@ const UNASSIGNED_VALUE = "UNASSIGNED";
 
 import { CustomerField } from "./customer-field";
 import { SaleLinePicker } from "./sale-line-picker";
-import { SaleLineItems, lineTotal, type LineDraft, type LineErrors } from "./sale-line-items";
+import { SaleLineItems, lineDiscount, lineTotal, type LineDraft, type LineErrors } from "./sale-line-items";
 
 function newId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -107,6 +107,10 @@ function draftLinesFrom(sale?: SaleRow): LineDraft[] {
         lineType: "PRODUCT",
         inventoryItemId: line.inventoryItemId,
         quantity: String(line.quantity ?? 0),
+        // Seed with what the customer was actually charged, not the catalogue
+        // price. Opening a sale for correction must show the bill as issued —
+        // otherwise a negotiated line silently reverts to list on the next save.
+        unitPrice: line.unitSellingPrice != null ? String(line.unitSellingPrice) : "",
       };
     });
 }
@@ -119,11 +123,15 @@ export function NewSalePageClient({
   salespeople = [],
   defaultSoldById,
   todayLabel,
+  canSellBelowCost = false,
 }: {
   /** Present on /sales/[id]/edit — the same form, correcting a recorded sale
    * in place (doc/sales-edit-void-scope.md §3). The invoice number survives, so
    * this is a correction, not a re-issue. */
   existingSale?: SaleRow;
+  /** Admin only — a Sales Person may negotiate a price down but not below
+   * the item's own cost. Enforced in the DB regardless (0034). */
+  canSellBelowCost?: boolean;
   items: InventoryItemRow[];
   customers: CustomerRow[];
   /** How often each item has actually sold — ranks search results and fills
@@ -309,6 +317,9 @@ export function NewSalePageClient({
   const installationTotal = lines
     .filter((l) => l.lineType === "INSTALLATION")
     .reduce((sum, l) => sum + lineTotal(l, items), 0);
+  // What the counter has given away against the catalogue, visible BEFORE
+  // Complete Sale rather than discovered in a report next month.
+  const negotiatedDiscount = lines.reduce((sum, l) => sum + lineDiscount(l, items), 0);
   const taxableTotal = subtotal + installationTotal;
   const gstPercentNum = Number(gstPercent) || 0;
   // Rounded to the nearest paisa before it ever reaches state used for
@@ -414,6 +425,13 @@ export function NewSalePageClient({
               lineType: "PRODUCT" as const,
               inventoryItemId: line.inventoryItemId ?? undefined,
               quantity: Math.trunc(Number(line.quantity) || 0),
+              // Only sent when actually negotiated. Undefined means "use the
+              // catalogue price", which is what the server did before this
+              // existed — so an untouched line behaves exactly as before.
+              unitSellingPrice:
+                (line.unitPrice ?? "").trim() !== "" && Number(line.unitPrice) > 0
+                  ? Number(line.unitPrice)
+                  : undefined,
             }
           : line.lineType === "COMBO"
           ? {
@@ -547,7 +565,15 @@ export function NewSalePageClient({
 
           <SaleLinePicker entries={pickerEntries} suggestedWheelCount={suggestedWheelCount} disabled={isSubmitting} onResolve={handlePicked} />
 
-          <SaleLineItems lines={lines} items={items} errors={lineErrors} disabled={isSubmitting} onUpdate={updateLine} onRemove={removeLine} />
+          <SaleLineItems
+            lines={lines}
+            items={items}
+            errors={lineErrors}
+            disabled={isSubmitting}
+            canSellBelowCost={canSellBelowCost}
+            onUpdate={updateLine}
+            onRemove={removeLine}
+          />
 
           {/* The money guard. Nothing else connects "there are tyres here" to
               "there should be a fitting charge", and an invoice missing one
@@ -660,6 +686,16 @@ export function NewSalePageClient({
                 <span>Subtotal</span>
                 <span className="font-medium text-neutral-900">{formatINR(subtotal)}</span>
               </div>
+              {/* Not part of the arithmetic — the subtotal above is already
+                  net of it. Shown so whoever approves the bill sees the
+                  margin given away before pressing Complete Sale, rather
+                  than finding it in a report next month. */}
+              {negotiatedDiscount > 0 && (
+                <div className="flex items-center justify-between text-warning">
+                  <span>Price negotiated down</span>
+                  <span className="font-medium">−{formatINR(negotiatedDiscount)}</span>
+                </div>
+              )}
               {installationTotal > 0 && (
                 <div className="flex items-center justify-between text-neutral-600">
                   <span>Installation Charges</span>

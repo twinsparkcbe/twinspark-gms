@@ -43,7 +43,9 @@ const joinedRow = {
   payment_screenshot_path: "abc123.jpg",
   unit_price_front: 4500,
   unit_price_back: null,
+  computed_amount: 4500,
   total_amount: 4500,
+  amount_is_overridden: false,
   status: "SUBMITTED",
   rejection_reason: null,
   submitted_at: "2026-07-01T10:00:00.000Z",
@@ -74,8 +76,35 @@ describe("submitOnlineOrder", () => {
       p_quantity_front: 1,
       p_quantity_back: 0,
       p_payment_screenshot_path: "abc123.jpg",
+      p_quoted_amount: null,
     });
     expect(result).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb01");
+  });
+
+  // ORD-010b: an untouched amount field must reach Postgres as null, not as
+  // the client's idea of the total — that is what lets submit_online_order()
+  // recompute the catalogue price itself (0036).
+  it("passes the quoted amount through only when the customer entered one", async () => {
+    const builder = createQueryBuilderMock({ data: null, error: null });
+    const supabase = createSupabaseMock(builder, { data: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb01", error: null });
+
+    await submitOnlineOrder(supabase, { ...validSubmitInput, quotedAmount: 4000 });
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "submit_online_order",
+      expect.objectContaining({ p_quoted_amount: 4000 })
+    );
+  });
+
+  // ORD-010c: /order is the app's only anonymous write path, so a
+  // non-positive amount must never make the round trip.
+  it("rejects a zero or negative quoted amount without calling Supabase", async () => {
+    const builder = createQueryBuilderMock({ data: null, error: null });
+    const supabase = createSupabaseMock(builder);
+
+    await expect(submitOnlineOrder(supabase, { ...validSubmitInput, quotedAmount: 0 })).rejects.toThrow();
+    await expect(submitOnlineOrder(supabase, { ...validSubmitInput, quotedAmount: -100 })).rejects.toThrow();
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
   // ORD-011: both quantities zero rejected before ever calling Supabase.

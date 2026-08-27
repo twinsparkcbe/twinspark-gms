@@ -25,9 +25,10 @@ function toErrorMessage(err: unknown, fallback: string): string {
  * requireOnlineOrdersAccess/etc. into this file.
  */
 
-// Shows the customer "how much am I about to pay" before they submit — the
-// authoritative price is re-checked server-side at submit time regardless
-// (see submitOnlineOrder's doc comment), this is display-only.
+// Seeds the "Amount to Pay" field on the order form. The catalogue price is
+// recomputed server-side at submit time regardless (see submitOnlineOrder's
+// doc comment) — a customer may override the amount with what they were
+// quoted, but never by tampering with what this returns.
 export async function fetchTrackTyrePricesAction(): Promise<ActionResult<TrackTyrePrices>> {
   try {
     const supabase = await createClient();

@@ -25,6 +25,17 @@ export const saleLineInputSchema = z
       .int("Quantity must be a whole number")
       .positive("Quantity must be greater than 0")
       .optional(),
+    /**
+     * Negotiated price for THIS sale only (0034). Omitted means "charge the
+     * catalogue price", which is what every caller did before this existed —
+     * so leaving it out preserves the original behaviour exactly. The server
+     * re-validates and applies the below-cost rule; this is the first gate,
+     * not the only one.
+     */
+    unitSellingPrice: z.coerce
+      .number()
+      .positive("Price must be greater than 0")
+      .optional(),
     // INSTALLATION fields.
     installationSubtype: z.enum(["TYRE_FITTING", "CUSTOM"]).optional(),
     /** COMBO only — the server expands the bundle from this id. */

@@ -1,5 +1,10 @@
 /**
- * Keystroke-level input masks for the employee form.
+ * Keystroke-level input masks for numeric form fields.
+ *
+ * Lives in lib/ rather than inside a module because Sales needs the amount
+ * mask for its negotiated line price and Attendance needs both for the
+ * employee form — and a module importing another module's helper is exactly
+ * the coupling the Attendance module was built to avoid.
  *
  * `inputMode="numeric"` only hints which keyboard a phone should show — it
  * places no restriction on a desktop keyboard, so the mobile field happily
