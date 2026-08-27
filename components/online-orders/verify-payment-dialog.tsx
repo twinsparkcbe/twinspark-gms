@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { formatINR } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { OnlineOrderRow } from "@/services/online-orders";
 
 type ActionResult = { success: boolean; error?: string };
@@ -99,6 +102,33 @@ export function VerifyPaymentDialog({
             />
           )}
           {!isLoadingUrl && !signedUrl && <p className="text-sm text-neutral-500">Couldn&apos;t load the screenshot.</p>}
+        </div>
+
+        {/* The figure to check the screenshot against, stated rather than
+            left to memory. When the customer entered their own amount
+            (0036_online_order_amount_override.sql) the catalogue price is
+            shown beside it: this dialog is the one place a quoted price
+            gets a second pair of eyes before the order moves on, and a
+            wrong amount is only recoverable while the order is still
+            SUBMITTED. Deliberately a warning, not a block — a quoted
+            discount is the normal case, not the exception. */}
+        <div
+          className={cn(
+            "flex items-start justify-between gap-3 rounded-[10px] border px-3 py-2.5",
+            currentOrder.amountIsOverridden ? "border-warning bg-warning/10" : "border-neutral-200 bg-neutral-50"
+          )}
+        >
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-neutral-500">Amount to collect</p>
+            <p className="text-lg font-bold text-neutral-900">{formatINR(currentOrder.totalAmount)}</p>
+            {currentOrder.amountIsOverridden && (
+              <p className="mt-0.5 text-xs text-neutral-600">
+                Customer entered this amount. Our price is {formatINR(currentOrder.computedAmount)} — check it matches
+                what was quoted before verifying.
+              </p>
+            )}
+          </div>
+          {currentOrder.amountIsOverridden && <Badge variant="warning">Quoted price</Badge>}
         </div>
 
         {currentOrder.status === "APPROVED" && (

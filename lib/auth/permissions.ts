@@ -69,3 +69,16 @@ export function canManageServiceCatalog(role: UserRole): boolean {
 export function canSetServicePaymentStatus(role: UserRole): boolean {
   return role === "admin";
 }
+
+/**
+ * Selling a line below its own cost price.
+ *
+ * Negotiating a price down at the counter is ordinary shop work and both
+ * Admin and Sales Person may do it (0034). Going below what the stock cost
+ * is the one move that needs the owner: it is either a mis-key or a decision
+ * only the person carrying the loss can take. Enforced in the database too
+ * (replace_sale_lines) — this is for the UI, not the guarantee.
+ */
+export function canSellBelowCost(role: UserRole): boolean {
+  return role === "admin";
+}

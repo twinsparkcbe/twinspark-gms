@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { canSellBelowCost } from "@/lib/auth/permissions";
 import { requireSalesAccess } from "@/lib/auth/require-sales-access";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -61,6 +62,7 @@ export default async function EditSalePage({ params }: { params: Promise<Params>
       usageCounts={usageCounts}
       salespeople={salespeople}
       todayLabel={todayLabel}
+      canSellBelowCost={canSellBelowCost(role)}
     />
   );
 }

@@ -69,6 +69,11 @@ export interface SaleLineItemRow {
   /** Billed at ₹0 because the combo price covers it; stock still moved. */
   includedInCombo: boolean;
   lineTotal: number;
+  /** What the catalogue said when this line was written (0034). Null on
+   * lines sold before price overrides existed, and on combo components. */
+  listPrice: number | null;
+  /** (listPrice - unitSellingPrice) x quantity, floored at 0. DB-generated. */
+  discountGiven: number;
   /** Sum of sale_returns.quantity against this line (0 when none) — shown
    * in the Sales list so a returned line is visible without opening the
    * Return dialog again (SALE-return-visibility). */
@@ -131,6 +136,8 @@ type SaleItemJoinedRow = {
   inventory_item_id: string | null;
   quantity: number | null;
   unit_selling_price: number | null;
+  list_price: number | null;
+  discount_given: number | null;
   installation_subtype: InstallationSubtype | null;
   wheel_count: number | null;
   description: string | null;
@@ -195,6 +202,8 @@ function mapLineItem(row: SaleItemJoinedRow): SaleLineItemRow {
     itemType: item?.item_type ?? null,
     quantity: row.quantity,
     unitSellingPrice: row.unit_selling_price !== null ? Number(row.unit_selling_price) : null,
+    listPrice: row.list_price !== null && row.list_price !== undefined ? Number(row.list_price) : null,
+    discountGiven: Number(row.discount_given ?? 0),
     installationSubtype: row.installation_subtype,
     wheelCount: row.wheel_count,
     description: row.description,
@@ -245,7 +254,7 @@ function mapSale(row: SaleJoinedRow): SaleRow {
 }
 
 const SALE_SELECT_COLUMNS =
-  "id, customer_id, sale_date, gst_applicable, gst_amount, discount_applicable, discount_amount, subtotal, installation_total, grand_total, invoice_number, payment_status, payment_mode, cash_amount, upi_amount, needs_service_followup, service_followup_note, sold_by_id, voided_at, void_reason, created_at, sold_by:profiles!sales_sold_by_id_fkey(full_name), customers!inner(name, mobile_number, address), sale_items(id, position, line_type, inventory_item_id, quantity, unit_selling_price, installation_subtype, wheel_count, description, amount, installed_by, line_total, combo_id, combo_contents, combo_list_value, included_in_combo, inventory_items(product_name, sku_code, item_type), sale_returns(quantity))";
+  "id, customer_id, sale_date, gst_applicable, gst_amount, discount_applicable, discount_amount, subtotal, installation_total, grand_total, invoice_number, payment_status, payment_mode, cash_amount, upi_amount, needs_service_followup, service_followup_note, sold_by_id, voided_at, void_reason, created_at, sold_by:profiles!sales_sold_by_id_fkey(full_name), customers!inner(name, mobile_number, address), sale_items(id, position, line_type, inventory_item_id, quantity, unit_selling_price, list_price, discount_given, installation_subtype, wheel_count, description, amount, installed_by, line_total, combo_id, combo_contents, combo_list_value, included_in_combo, inventory_items(product_name, sku_code, item_type), sale_returns(quantity))";
 
 export async function getSale(supabase: SupabaseClient<Database>, id: string): Promise<SaleRow> {
   const { data, error } = await supabase.from("sales").select(SALE_SELECT_COLUMNS).eq("id", id).maybeSingle();
@@ -349,6 +358,9 @@ function toRpcLines(input: SaleInput) {
         line_type: "PRODUCT",
         inventory_item_id: line.inventoryItemId,
         quantity: line.quantity,
+        // Undefined is meaningful: the server falls back to the catalogue
+        // price (or, on an edit, to what the customer was already charged).
+        unit_selling_price: line.unitSellingPrice,
       };
     }
     if (line.lineType === "COMBO") {

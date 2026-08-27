@@ -15,6 +15,12 @@ export type OnlineOrderSort = (typeof ONLINE_ORDER_SORT_OPTIONS)[number];
 
 const PIN_CODE_REGEX = /^[0-9]{6}$/;
 
+/** Absolute client-side ceiling on a customer-entered amount. The real,
+ * order-aware limit (3x the catalogue value) is enforced by
+ * submit_online_order() — a client-side cap can always be bypassed, so this
+ * one only exists to give a typo instant feedback instead of a round trip. */
+export const MAX_QUOTED_AMOUNT = 100000;
+
 /** Standalone field schemas — exported so the public order form (a Client
  * Component) can re-validate individual fields on the client with the exact
  * same rule as the server, without depending on `.shape` of the full
@@ -58,6 +64,21 @@ export const submitOnlineOrderInputSchema = z
     /** Storage path returned by uploadPaymentScreenshot(), not a raw File —
      * the file itself is uploaded first (see services/online-orders/orders.ts). */
     paymentScreenshotPath: z.string().trim().min(1, "A payment screenshot is required"),
+    /**
+     * The amount the customer was quoted over the phone/WhatsApp, when it
+     * differs from the catalogue total (0036_online_order_amount_override.sql).
+     * Optional: omitted means "charge the catalogue price", which is what
+     * every order did before this field existed.
+     *
+     * This is the only money figure the client may influence anywhere in the
+     * app, and /order is anonymous, so the real bounds live in Postgres —
+     * this schema only stops obvious garbage from making the round trip.
+     */
+    quotedAmount: z.coerce
+      .number()
+      .positive("Amount must be greater than zero")
+      .max(MAX_QUOTED_AMOUNT, "Enter the amount you were quoted")
+      .optional(),
   })
   .superRefine((value, ctx) => {
     if (value.quantityFront === 0 && value.quantityBack === 0) {

@@ -26,3 +26,6 @@ next-env.d.ts
 
 # supabase
 supabase/.temp
+
+# local backup tarballs (may contain .env.local)
+*.tgz

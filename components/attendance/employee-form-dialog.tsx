@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { maskAmountInput, maskMobileInput } from "@/services/attendance/input-masks";
+import { maskAmountInput, maskMobileInput } from "@/lib/input-masks";
 import { ATTENDANCE_ROLE_LABELS, ATTENDANCE_ROLES } from "@/services/attendance/schemas";
 import type { AttendanceEmployeeRow } from "@/services/attendance/types";
 import type { AttendanceRole } from "@/types/database.types";

@@ -33,6 +33,13 @@ function StatCard({ icon: Icon, iconClassName, label, value }: { icon: React.Com
   );
 }
 
+/** What was given away against the catalogue on this sale (0034). Summed
+ * from the DB-generated per-line column, so it can't drift from the prices
+ * actually stored on the invoice. */
+function saleDiscountGiven(sale: SaleRow): number {
+  return sale.lineItems.reduce((sum, line) => sum + (line.discountGiven ?? 0), 0);
+}
+
 function itemsSummary(sale: SaleRow): string {
   const productLines = sale.lineItems.filter((l) => l.lineType === "PRODUCT");
   if (productLines.length === 0) return "—";
@@ -57,7 +64,7 @@ function revenueByItemType(sales: SaleRow[]): { itemType: ItemType; amount: numb
 }
 
 // Date | Customer | Invoice # | Items | Amount
-const ROW_GRID_CLASS = "grid grid-cols-[100px_minmax(160px,220px)_130px_minmax(200px,1fr)_130px] gap-3";
+const ROW_GRID_CLASS = "grid grid-cols-[95px_minmax(150px,200px)_120px_minmax(170px,1fr)_115px_120px] gap-3";
 
 export function SalesReportClient({ initialSales, initialTotal, initialStats }: { initialSales: SaleRow[]; initialTotal: number; initialStats: SalesStats }) {
   const { preset, customFrom, customTo, data, rangeLabel, isLoading, canReset, setCustomFrom, setCustomTo, handlePresetChange, handleApplyCustom, handleReset } = useReportDateRange<SalesReportData>(
@@ -73,6 +80,7 @@ export function SalesReportClient({ initialSales, initialTotal, initialStats }: 
     { header: "Mobile", accessor: (sale) => sale.customerMobile },
     { header: "Invoice #", accessor: (sale) => sale.invoiceNumber },
     { header: "Items", accessor: (sale) => itemsSummary(sale) },
+    { header: "Discount Given", accessor: (sale) => saleDiscountGiven(sale) },
     { header: "Amount", accessor: (sale) => sale.grandTotal },
   ];
 
@@ -141,6 +149,7 @@ export function SalesReportClient({ initialSales, initialTotal, initialStats }: 
             <span>Customer</span>
             <span>Invoice #</span>
             <span>Items</span>
+            <span className="text-right">Discount Given</span>
             <span className="text-right">Amount</span>
           </div>
 
@@ -166,6 +175,15 @@ export function SalesReportClient({ initialSales, initialTotal, initialStats }: 
                 </div>
                 <div role="cell" aria-label="Items" className="min-w-0 truncate text-sm text-neutral-700">
                   {itemsSummary(sale)}
+                </div>
+                {/* Zero shows as a dash, not Rs 0.00 — a column of zeroes
+                    makes the sales that DID discount hard to spot. */}
+                <div role="cell" aria-label="Discount given" className="min-w-0 text-right text-sm">
+                  {saleDiscountGiven(sale) > 0 ? (
+                    <span className="font-semibold text-warning">−{formatINR(saleDiscountGiven(sale))}</span>
+                  ) : (
+                    <span className="text-neutral-300">—</span>
+                  )}
                 </div>
                 <div role="cell" aria-label="Amount" className="min-w-0 text-right text-sm font-semibold text-neutral-900">
                   {formatINR(sale.grandTotal)}

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatINR } from "@/lib/format";
+import { maskAmountInput } from "@/lib/input-masks";
 import { cn } from "@/lib/utils";
 
 import { PaymentDetailsCard } from "@/components/online-orders/payment-details-card";
@@ -22,7 +22,7 @@ import {
 // re-exports orders.ts, which is server-only. Reusing the actual Zod schema
 // (rather than a hand-copied regex) means client and server validation for
 // mobile number/PIN code can never drift apart.
-import { mobileNumberSchema, pinCodeSchema } from "@/services/online-orders/schemas";
+import { MAX_QUOTED_AMOUNT, mobileNumberSchema, pinCodeSchema } from "@/services/online-orders/schemas";
 import { MOBILE_NUMBER_LENGTH, sanitizeMobileNumber } from "@/services/shared/mobile";
 // From the leaf module, not the "@/services/payments" barrel — same reason
 // as the mobileNumberSchema/pinCodeSchema import above: the barrel also
@@ -35,26 +35,23 @@ import type { PaymentQrConfigRow } from "@/services/payments/qr-config";
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
+/**
+ * No per-tyre price is shown to the customer (confirmed 2026-08-27) — only
+ * the order total. The unit prices still drive that total; they are simply
+ * not advertised on the public form.
+ */
 function QuantityStepper({
   label,
   value,
-  price,
-  isLoadingPrice,
   onChange,
 }: {
   label: string;
   value: number;
-  /** null = no active item priced yet for this position. */
-  price: number | null;
-  isLoadingPrice: boolean;
   onChange: (next: number) => void;
 }) {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <p className="text-xs text-neutral-500">
-        {isLoadingPrice ? "Loading price..." : price !== null ? `${formatINR(price)} / tyre` : "Price unavailable"}
-      </p>
       <div className="flex items-center gap-2">
         <Button
           type="button"
@@ -119,10 +116,16 @@ export function PublicOrderForm({ paymentConfig }: { paymentConfig: PaymentQrCon
 
   const [prices, setPrices] = useState<{ front: number | null; back: number | null }>({ front: null, back: null });
   const [isLoadingPrices, setIsLoadingPrices] = useState(true);
+  const [amountInput, setAmountInput] = useState("");
+  // Once the customer types their own figure the field is theirs — see the
+  // resync effect below for why this has to be tracked separately.
+  const [amountTouched, setAmountTouched] = useState(false);
 
-  // Display-only — the authoritative price is looked up again server-side
-  // at submit time (submitOnlineOrder never trusts a client-supplied
-  // amount), so this can't be used to under-report what's actually owed.
+  // Seeds the Amount to Pay field. The catalogue price is looked up again
+  // server-side at submit time, so tampering with what comes back here
+  // changes nothing: an untouched field is recomputed from scratch, and a
+  // touched one is bounds-checked and flagged for staff review
+  // (0036_online_order_amount_override.sql).
   useEffect(() => {
     let cancelled = false;
     fetchTrackTyrePricesAction().then((result) => {
@@ -135,8 +138,19 @@ export function PublicOrderForm({ paymentConfig }: { paymentConfig: PaymentQrCon
     };
   }, []);
 
-  const totalAmount = quantityFront * (prices.front ?? 0) + quantityBack * (prices.back ?? 0);
+  const catalogueAmount = quantityFront * (prices.front ?? 0) + quantityBack * (prices.back ?? 0);
+  const hasSelection = quantityFront > 0 || quantityBack > 0;
   const hasUnpricedSelection = (quantityFront > 0 && prices.front === null) || (quantityBack > 0 && prices.back === null);
+
+  // Prefill (and keep in step with the quantity steppers) until the customer
+  // takes the field over. After that the typed figure stands: most orders
+  // here start with a phone call, and silently overwriting the amount the
+  // shop quoted because a quantity changed afterwards would be worse than a
+  // stale-looking number the customer can see and correct.
+  useEffect(() => {
+    if (amountTouched || isLoadingPrices) return;
+    setAmountInput(hasSelection ? String(catalogueAmount) : "");
+  }, [amountTouched, isLoadingPrices, hasSelection, catalogueAmount]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -176,6 +190,16 @@ export function PublicOrderForm({ paymentConfig }: { paymentConfig: PaymentQrCon
     if (quantityFront === 0 && quantityBack === 0) {
       next.quantityFront = "Order at least one Track Tyre (Front or Back).";
     }
+
+    if (hasSelection) {
+      const parsedAmount = Number(amountInput);
+      if (!amountInput.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        next.amount = "Enter the amount you were asked to pay.";
+      } else if (parsedAmount > MAX_QUOTED_AMOUNT) {
+        next.amount = "That amount looks too high — please call us to confirm the price.";
+      }
+    }
+
     if (!screenshotFile) next.screenshot = "Upload your payment screenshot.";
     return next;
   }
@@ -204,6 +228,12 @@ export function PublicOrderForm({ paymentConfig }: { paymentConfig: PaymentQrCon
       pinCode: pinCode.trim(),
       quantityFront,
       quantityBack,
+      // Sent only when the customer actually changed it. An untouched field
+      // means "charge me your price", and submit_online_order() recomputes
+      // that server-side — so a price that moved between page load and
+      // submit is picked up rather than frozen, and the order is not
+      // wrongly flagged as an override.
+      quotedAmount: amountTouched ? Number(amountInput) : undefined,
       paymentScreenshotPath: uploadResult.data.path,
     });
     setIsSubmitting(false);
@@ -295,8 +325,6 @@ export function PublicOrderForm({ paymentConfig }: { paymentConfig: PaymentQrCon
           <QuantityStepper
             label="Track Tyre — Front"
             value={quantityFront}
-            price={prices.front}
-            isLoadingPrice={isLoadingPrices}
             onChange={(next) => {
               setQuantityFront(next);
               setErrors((prev) => ({ ...prev, quantityFront: "" }));
@@ -305,8 +333,6 @@ export function PublicOrderForm({ paymentConfig }: { paymentConfig: PaymentQrCon
           <QuantityStepper
             label="Track Tyre — Back"
             value={quantityBack}
-            price={prices.back}
-            isLoadingPrice={isLoadingPrices}
             onChange={(next) => {
               setQuantityBack(next);
               setErrors((prev) => ({ ...prev, quantityFront: "" }));
@@ -315,17 +341,37 @@ export function PublicOrderForm({ paymentConfig }: { paymentConfig: PaymentQrCon
         </div>
         {errors.quantityFront && <p className="-mt-2 text-sm text-danger">{errors.quantityFront}</p>}
 
-        {(quantityFront > 0 || quantityBack > 0) && (
-          <div className="flex items-center justify-between rounded-[10px] bg-neutral-100 px-4 py-3">
-            <span className="text-sm font-medium text-neutral-600">Total Amount</span>
-            <span className="text-lg font-bold text-neutral-900">{formatINR(totalAmount)}</span>
+        {hasSelection && (
+          <div className="space-y-2 rounded-[10px] bg-neutral-100 px-4 py-3">
+            <Label htmlFor="order-amount">Amount to Pay *</Label>
+            {isLoadingPrices ? (
+              <p className="text-sm text-neutral-500">Calculating...</p>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-semibold text-neutral-500">&#8377;</span>
+                  <Input
+                    id="order-amount"
+                    inputMode="decimal"
+                    className="bg-white text-lg font-bold"
+                    value={amountInput}
+                    onChange={(e) => {
+                      setAmountTouched(true);
+                      setAmountInput(maskAmountInput(e.target.value));
+                      setErrors((prev) => ({ ...prev, amount: "" }));
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                <p className="text-xs text-neutral-500">
+                  {hasUnpricedSelection
+                    ? "Enter the amount our team quoted you, then pay that amount below."
+                    : "If our team quoted you a different amount, enter it here and pay that amount."}
+                </p>
+              </>
+            )}
+            {errors.amount && <p className="text-sm text-danger">{errors.amount}</p>}
           </div>
-        )}
-        {hasUnpricedSelection && (
-          <p className="-mt-2 text-xs text-neutral-500">
-            One of your selected positions doesn&apos;t have a price set yet — our team will confirm the amount with
-            you directly.
-          </p>
         )}
 
         {paymentConfig && (

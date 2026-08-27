@@ -67,8 +67,16 @@ export interface OnlineOrderRow {
   unitPriceFront: number | null;
   unitPriceBack: number | null;
   /** quantityFront * unitPriceFront + quantityBack * unitPriceBack, computed
-   * and stored server-side at submission — never recomputed client-side. */
+   * and stored server-side at submission — never client-supplied. This is
+   * the catalogue value of the order, the reference figure staff compare
+   * against (0036_online_order_amount_override.sql). */
+  computedAmount: number;
+  /** What the customer will actually pay: the amount they were quoted when
+   * they entered one, otherwise computedAmount. */
   totalAmount: number;
+  /** True when the two differ — surfaced at Verify Payment so a quoted
+   * price is checked by a human rather than passing silently. */
+  amountIsOverridden: boolean;
   status: OnlineOrderStatus;
   rejectionReason: string | null;
   submittedAt: string;
@@ -94,7 +102,9 @@ type OnlineOrderDbRow = {
   payment_screenshot_path: string;
   unit_price_front: number | null;
   unit_price_back: number | null;
+  computed_amount: number;
   total_amount: number;
+  amount_is_overridden: boolean;
   status: OnlineOrderStatus;
   rejection_reason: string | null;
   submitted_at: string;
@@ -110,7 +120,7 @@ type OnlineOrderDbRow = {
 };
 
 const SELECT_COLUMNS =
-  "id, customer_name, mobile_number, address, pin_code, quantity_front, quantity_back, payment_screenshot_path, unit_price_front, unit_price_back, total_amount, status, rejection_reason, submitted_at, verified_by, verified_at, approved_by, approved_at, dispatched_by, dispatched_at, rejected_by, rejected_at, created_at";
+  "id, customer_name, mobile_number, address, pin_code, quantity_front, quantity_back, payment_screenshot_path, unit_price_front, unit_price_back, computed_amount, total_amount, amount_is_overridden, status, rejection_reason, submitted_at, verified_by, verified_at, approved_by, approved_at, dispatched_by, dispatched_at, rejected_by, rejected_at, created_at";
 
 function mapOnlineOrder(row: OnlineOrderDbRow): OnlineOrderRow {
   return {
@@ -124,7 +134,9 @@ function mapOnlineOrder(row: OnlineOrderDbRow): OnlineOrderRow {
     paymentScreenshotPath: row.payment_screenshot_path,
     unitPriceFront: row.unit_price_front !== null ? Number(row.unit_price_front) : null,
     unitPriceBack: row.unit_price_back !== null ? Number(row.unit_price_back) : null,
+    computedAmount: Number(row.computed_amount),
     totalAmount: Number(row.total_amount),
+    amountIsOverridden: row.amount_is_overridden,
     status: row.status,
     rejectionReason: row.rejection_reason,
     submittedAt: row.submitted_at,
@@ -235,6 +247,9 @@ export async function submitOnlineOrder(
     p_quantity_front: input.quantityFront,
     p_quantity_back: input.quantityBack,
     p_payment_screenshot_path: input.paymentScreenshotPath,
+    // Omitted (null) means "use the catalogue price" — submit_online_order()
+    // computes and stores that itself either way.
+    p_quoted_amount: input.quotedAmount ?? null,
   });
 
   if (error) {
@@ -371,7 +386,10 @@ export interface OnlineOrdersReportStats {
   submittedCount: number;
   /** Orders dispatched in the range (dispatched_at). */
   dispatchedCount: number;
-  /** Sum of total_amount for orders dispatched in the range. */
+  /** Sum of total_amount for orders dispatched in the range — i.e. what was
+   * actually charged, including any quoted price the customer entered
+   * (confirmed 2026-08-27), not the catalogue value. Reconciles against
+   * money received; use computed_amount if you ever need list value. */
   dispatchedAmount: number;
   /** Orders rejected in the range (rejected_at). */
   rejectedCount: number;

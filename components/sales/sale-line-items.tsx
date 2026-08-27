@@ -18,6 +18,7 @@ import {
 // type uniformly, same picker Record Purchase already uses.
 import { ItemPickerCombobox } from "@/components/purchases/item-picker-combobox";
 import { formatINR } from "@/lib/format";
+import { maskAmountInput } from "@/lib/input-masks";
 import { cn } from "@/lib/utils";
 import type { InventoryItemRow } from "@/services/inventory";
 
@@ -27,6 +28,11 @@ export type LineDraft =
       lineType: "PRODUCT";
       inventoryItemId: string | null;
       quantity: string;
+      /** Negotiated price for this sale only (0034). Empty string means
+       * "charge the catalogue price" — the same meaning the field had by its
+       * absence before it existed, so untouched lines behave exactly as
+       * before and nothing is sent to the server for them. */
+      unitPrice?: string;
     }
   /**
    * A combo on a sale is one line and nothing more. Unlike Service — where
@@ -88,6 +94,30 @@ const ROW_GRID_CLASS =
  * record rather than a ragged list. */
 const STACKED_CELL = "col-start-2 md:col-start-auto";
 
+/**
+ * What a product line actually charges per unit: the negotiated price when
+ * one has been typed and parses, otherwise the catalogue price. Exported so
+ * the row, the running totals and the submitted payload can never disagree
+ * about it — three places computing "the price" independently is how a bill
+ * ends up not matching its own line items.
+ */
+function effectiveUnitPrice(line: LineDraft, item: InventoryItemRow): number {
+  if (line.lineType !== "PRODUCT") return 0;
+  const typed = Number(line.unitPrice);
+  if ((line.unitPrice ?? "").trim() !== "" && Number.isFinite(typed) && typed > 0) return typed;
+  return item.sellingPrice;
+}
+
+/** Money given away on this line versus the catalogue — never negative, so an
+ * upcharge reads as zero discount rather than a negative one. */
+function lineDiscount(line: LineDraft, items: InventoryItemRow[]): number {
+  if (line.lineType !== "PRODUCT") return 0;
+  const item = items.find((i) => i.id === line.inventoryItemId);
+  if (!item) return 0;
+  const qty = Math.trunc(Number(line.quantity) || 0);
+  return Math.max(0, item.sellingPrice - effectiveUnitPrice(line, item)) * qty;
+}
+
 function lineTotal(line: LineDraft, items: InventoryItemRow[]): number {
   if (line.lineType === "COMBO") {
     return (Number(line.comboPrice) || 0) * Math.trunc(Number(line.quantity) || 0);
@@ -95,7 +125,8 @@ function lineTotal(line: LineDraft, items: InventoryItemRow[]): number {
   if (line.lineType === "PRODUCT") {
     const item = items.find((i) => i.id === line.inventoryItemId);
     const qty = Math.trunc(Number(line.quantity) || 0);
-    return item ? item.sellingPrice * qty : 0;
+    if (!item) return 0;
+    return effectiveUnitPrice(line, item) * qty;
   }
   if (line.installationSubtype === "TYRE_FITTING") {
     const override = Number(line.amount);
@@ -183,6 +214,7 @@ export function SaleLineItems({
   items,
   errors,
   disabled,
+  canSellBelowCost = false,
   onUpdate,
   onRemove,
 }: {
@@ -190,6 +222,9 @@ export function SaleLineItems({
   items: InventoryItemRow[];
   errors: LineErrors;
   disabled?: boolean;
+  /** Admin only. The database enforces this too (replace_sale_lines) — the
+   * flag just lets the row say so before the save is attempted. */
+  canSellBelowCost?: boolean;
   onUpdate: (id: string, patch: Partial<LineDraft>) => void;
   onRemove: (id: string) => void;
 }) {
@@ -326,14 +361,67 @@ export function SaleLineItems({
 
                       {/* Stacked, these are bare numbers with no column heading
                           above them, so each carries its own mobile-only label. */}
-                      <div
-                        className={cn(
-                          STACKED_CELL,
-                          "flex h-9 items-center justify-between text-sm text-neutral-600 md:justify-end"
+                      {/* Editable at the counter: a customer haggles, the
+                          price moves for THIS sale only. The catalogue is
+                          untouched — that still comes from the newest purchase
+                          batch. Blank restores the catalogue price. */}
+                      <div className={cn(STACKED_CELL, "flex flex-col justify-center md:items-end")}>
+                        {selectedItem ? (
+                          (() => {
+                            const charged = effectiveUnitPrice(line, selectedItem);
+                            const isOverridden = charged !== selectedItem.sellingPrice;
+                            const belowCost = charged < selectedItem.purchasePrice;
+                            const blocked = belowCost && !canSellBelowCost;
+
+                            return (
+                              <>
+                                <div className="flex h-9 w-full items-center justify-between gap-2 md:justify-end">
+                                  <span className="text-xs text-neutral-400 md:hidden">Price</span>
+                                  <div className="relative">
+                                    <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-neutral-400">
+                                      &#8377;
+                                    </span>
+                                    <input
+                                      inputMode="decimal"
+                                      aria-label={`Price for ${selectedItem.productName}`}
+                                      value={line.unitPrice ?? ""}
+                                      placeholder={String(selectedItem.sellingPrice)}
+                                      disabled={disabled}
+                                      onChange={(e) => onUpdate(line.id, { unitPrice: maskAmountInput(e.target.value) })}
+                                      className={cn(
+                                        "h-9 w-[104px] rounded-[8px] border bg-white pr-2 pl-5 text-right text-sm tabular-nums outline-none focus-visible:ring-2 disabled:bg-neutral-50",
+                                        blocked
+                                          ? "border-danger text-danger focus-visible:border-danger focus-visible:ring-danger/20"
+                                          : isOverridden
+                                            ? "border-warning text-neutral-900 focus-visible:border-warning focus-visible:ring-warning/20"
+                                            : "border-neutral-200 text-neutral-600 focus-visible:border-brand-red focus-visible:ring-brand-red/20"
+                                      )}
+                                    />
+                                  </div>
+                                </div>
+                                {blocked ? (
+                                  <p className="mt-0.5 text-right text-[11px] font-medium text-danger">
+                                    Below cost ({formatINR(selectedItem.purchasePrice)}) — needs an Administrator
+                                  </p>
+                                ) : isOverridden ? (
+                                  // The list price stays on screen so the person
+                                  // approving the bill can see what was given away.
+                                  <p className="mt-0.5 text-right text-[11px] text-neutral-500">
+                                    <span className="line-through">{formatINR(selectedItem.sellingPrice)}</span>{" "}
+                                    <span className={charged < selectedItem.sellingPrice ? "font-semibold text-warning" : "font-semibold text-success"}>
+                                      {charged < selectedItem.sellingPrice ? "−" : "+"}
+                                      {formatINR(Math.abs(selectedItem.sellingPrice - charged))}
+                                    </span>
+                                  </p>
+                                ) : null}
+                              </>
+                            );
+                          })()
+                        ) : (
+                          <div className="flex h-9 items-center justify-between text-sm text-neutral-600 md:justify-end">
+                            <span className="text-xs text-neutral-400 md:hidden">Price</span>—
+                          </div>
                         )}
-                      >
-                        <span className="text-xs text-neutral-400 md:hidden">Price</span>
-                        {selectedItem ? formatINR(selectedItem.sellingPrice) : "—"}
                       </div>
                       <div
                         className={cn(
@@ -591,4 +679,4 @@ export function SaleLineItems({
   );
 }
 
-export { lineTotal, TYRE_FITTING_RATE };
+export { effectiveUnitPrice, lineDiscount, lineTotal, TYRE_FITTING_RATE };
