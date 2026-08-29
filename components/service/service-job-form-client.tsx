@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  AlertTriangle,
   Bike,
   CalendarClock,
   CheckCircle2,
@@ -71,6 +72,8 @@ import { PendingJobBanner } from "./pending-job-banner";
 import { ServiceLinePicker } from "./service-line-picker";
 import { ServiceJobLines, type ServiceLineDraft, type ServiceLineErrors } from "./service-job-lines";
 import { ServicePartsUsed, type PartUsedDraft, type PartUsedErrors } from "./service-parts-used";
+
+import { findStockShortfalls, stockShortfallMessage } from "@/services/service/stock-check";
 
 const COMMON_COMPLAINTS = ["Engine Noise", "Brake Issue", "Starting Problem", "Mileage Drop", "Chain Noise"];
 
@@ -201,6 +204,30 @@ export function ServiceJobFormClient({
       includedInCombo: u.includedInCombo,
     })),
   );
+
+  /**
+   * Parts on this job that the shelf can't cover. Recomputed on every render
+   * so the warning appears the moment a part is added or its quantity raised,
+   * rather than only when the counter presses the button.
+   *
+   * Correcting a completed job credits back what that job already holds:
+   * edit_completed_service_job() restores its original parts before
+   * re-deducting the corrected list, so leaving the parts alone must not be
+   * refused just because Inventory now reads zero.
+   */
+  const stockShortfalls = findStockShortfalls({
+    parts: parts.map((p) => ({
+      inventoryItemId: p.inventoryItemId,
+      quantityUsed: Math.trunc(Number(p.quantityUsed) || 0),
+    })),
+    items,
+    alreadyDeducted: isCompletedEdit
+      ? (existingJob?.usage ?? []).map((u) => ({
+          inventoryItemId: u.inventoryItemId,
+          quantityUsed: u.quantityUsed,
+        }))
+      : undefined,
+  });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
@@ -480,6 +507,45 @@ export function ServiceJobFormClient({
     };
   }
 
+  /**
+   * The hard stop, on EVERY save — Complete, Save Draft, Save Changes and a
+   * correction to a completed job alike.
+   *
+   * Draft saves don't move stock, so on the face of it they could be let
+   * through. They aren't, because of what the counter actually does when the
+   * bill is refused: not knowing why, they press Save Draft instead, and
+   * again, and again — trading one pile of duplicate jobs for another. One
+   * rule the whole screen obeys ("a part that isn't there stops the job")
+   * is easier to learn than a rule that depends on which button you press.
+   *
+   * Every press re-fires the toast, so a counter who keeps pressing keeps
+   * being told exactly which part is short and what to do about it.
+   *
+   * Returns true when it has blocked the submit.
+   */
+  function blockedByStock(): boolean {
+    if (stockShortfalls.length === 0) return false;
+
+    const message = stockShortfallMessage(stockShortfalls);
+
+    // Mark the offending rows too — the banner says which parts, the red
+    // quantity field says which line to change.
+    const short = new Set(stockShortfalls.map((s) => s.inventoryItemId));
+    setPartErrors((prev) => {
+      const next = { ...prev };
+      for (const part of parts) {
+        if (part.inventoryItemId && short.has(part.inventoryItemId)) {
+          next[part.id] = { ...(next[part.id] ?? {}), quantityUsed: "Not enough stock." };
+        }
+      }
+      return next;
+    });
+
+    setErrors((prev) => ({ ...prev, form: message }));
+    toast.error(message);
+    return true;
+  }
+
   async function handleSubmit() {
     if (!validate()) return;
     if (isCompletedEdit && lines.length === 0) {
@@ -488,6 +554,7 @@ export function ServiceJobFormClient({
       toast.error(message);
       return;
     }
+    if (blockedByStock()) return;
 
     const input = buildInput();
 
@@ -537,6 +604,10 @@ export function ServiceJobFormClient({
       toast.error(message);
       return;
     }
+    // Nothing is sent while a part is short. This is what stops the duplicate
+    // jobs: the create call that used to run before the stock failure never
+    // happens, so there is no half-made job for a retry to duplicate.
+    if (blockedByStock()) return;
 
     const input = buildInput();
 
@@ -718,7 +789,34 @@ export function ServiceJobFormClient({
                   onUpdate={updatePart}
                   onRemove={removePart}
                 />
-                <p className="text-xs text-neutral-400">Stock only deducts when this job is completed.</p>
+                {stockShortfalls.length > 0 ? (
+                  /* Shown as soon as the part is added, not held back until
+                     the button is pressed — the counter can swap the part or
+                     restock while the customer is still standing there. The
+                     same list is repeated in the toast if they press anyway. */
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2 rounded-[10px] border border-danger/30 bg-danger-bg px-3 py-2.5"
+                  >
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" />
+                    <div className="min-w-0 text-xs text-danger">
+                      <p className="font-semibold">Not enough stock</p>
+                      <ul className="mt-1 space-y-0.5">
+                        {stockShortfalls.map((s) => (
+                          <li key={s.inventoryItemId}>
+                            {s.productName} — need {s.required}, {s.available} in stock
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-1.5 text-danger/80">
+                        Remove {stockShortfalls.length === 1 ? "it" : "them"} from this job, or add stock in
+                        Inventory. The job can&apos;t be saved or billed until then.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-neutral-400">Stock only deducts when this job is completed.</p>
+                )}
               </div>
             )}
           </div>
