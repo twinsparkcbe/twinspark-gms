@@ -5,11 +5,13 @@ import Link from "next/link";
 import { ClipboardList, Pencil, Printer, Receipt, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ListPagination } from "@/components/shared/list-pagination";
 import { RecordCard, RecordCardActions, RecordCardFields, RecordCardHeader } from "@/components/shared/record-card";
 import { RecordPaymentDialog } from "@/components/shared/record-payment-dialog";
+import { balanceDueFor, paymentChipFor } from "@/components/shared/payment-chip";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { formatINR } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -27,8 +29,40 @@ import { UndoServiceJobDialog } from "./undo-service-job-dialog";
 // Actions is wider than it was: the next-step button now lives in the row
 // rather than behind a trip to the detail page (rework plan Change 3), and
 // carries print/edit/undo alongside it (doc/service-edit-undo-scope.md §4).
+/**
+ * How the job was paid, shown under the amount. The same chip Sales uses in
+ * its Paid column (components/shared/payment-chip.ts) so cash and UPI read
+ * identically on both screens.
+ *
+ * Only rendered on a COMPLETED job. Payment is captured at completion, so a
+ * Draft or In Progress job has no payment_status at all — running it through
+ * the chip logic would fall through to "paid, tender unknown" and show an em
+ * dash on work nobody has billed yet.
+ */
+function ServicePaymentChip({ job }: { job: ServiceJobRow }) {
+  if (job.status !== "COMPLETED") return null;
+
+  const chip = paymentChipFor({
+    paymentStatus: job.paymentStatus,
+    paymentMode: job.paymentMode,
+    balanceDue: balanceDueFor({
+      paymentStatus: job.paymentStatus,
+      paymentMode: job.paymentMode,
+      cashAmount: job.cashAmount,
+      upiAmount: job.upiAmount,
+      grandTotal: job.grandTotal,
+    }),
+  });
+
+  return (
+    <Badge variant={chip.variant} title={chip.title}>
+      {chip.label}
+    </Badge>
+  );
+}
+
 const ROW_GRID_CLASS =
-  "grid grid-cols-[120px_150px_minmax(160px,220px)_140px_160px_120px_minmax(260px,300px)] gap-3";
+  "grid grid-cols-[120px_150px_minmax(160px,220px)_140px_160px_180px_minmax(260px,300px)] gap-3";
 
 export function ServiceJobsTable({
   jobs,
@@ -145,6 +179,7 @@ export function ServiceJobsTable({
                 trailing={
                   <div className="flex flex-col items-end gap-1.5">
                     <span className="text-sm font-bold text-neutral-900">{formatINR(job.grandTotal)}</span>
+                    <ServicePaymentChip job={job} />
                     <ServiceJobStatusBadge status={job.status} />
                   </div>
                 }
@@ -173,7 +208,7 @@ export function ServiceJobsTable({
       </div>
 
       <div className="hidden overflow-x-auto md:block">
-        <div role="table" aria-label="Service Jobs" aria-busy={isLoading} className="min-w-[900px]">
+        <div role="table" aria-label="Service Jobs" aria-busy={isLoading} className="min-w-[960px]">
           <div role="row" className={cn(ROW_GRID_CLASS, "px-4 py-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase")}>
             <span>Job #</span>
             <span>Vehicle</span>
@@ -240,8 +275,24 @@ export function ServiceJobsTable({
                     <ServiceJobStatusBadge status={job.status} />
                   </div>
 
-                  <div role="cell" aria-label="Amount" className="min-w-0">
-                    <span className="text-sm font-semibold text-neutral-900">{formatINR(job.grandTotal)}</span>
+                  {/* Chip beside the figure, not under it. Only a COMPLETED
+                      job has one, so stacking would make completed rows
+                      taller than in-progress rows and leave the list ragged.
+
+                      The figure gets a fixed slot rather than its natural
+                      width: let the chip sit right after the number and its
+                      left edge moves with every total, so a column of mixed
+                      amounts gets a ragged line of chips. 104px is the widest
+                      realistic total (a lakh-scale job, Inter 14/600) and
+                      tabular-nums keeps the digits themselves in columns.
+                      Sales gets this for free by giving its chip a grid
+                      column of its own; here the chip shares the Amount
+                      cell, so the slot has to be reserved by hand. */}
+                  <div role="cell" aria-label="Amount" className="flex min-w-0 items-center gap-2">
+                    <span className="w-[104px] shrink-0 truncate text-sm font-semibold text-neutral-900 tabular-nums">
+                      {formatINR(job.grandTotal)}
+                    </span>
+                    <ServicePaymentChip job={job} />
                   </div>
 
                   <div role="cell" aria-label="Actions" className="flex items-center justify-end gap-1">

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { getSaleRowActions, saleHasReturn } from "@/services/sales/sale-row-actions";
 import type { SaleRow } from "@/services/sales";
 
-import { balanceDueFor, paymentChipFor } from "./payment-chip";
+import { balanceDueFor, paymentChipFor } from "@/components/shared/payment-chip";
 
 // Date | Customer | Invoice # | Items | Amount | Paid | Actions
 // Fixed/minmax tracks throughout (no 1fr) — matches Purchases' entries table
@@ -25,7 +25,8 @@ const ROW_GRID_CLASS =
   "grid grid-cols-[100px_minmax(160px,220px)_130px_minmax(180px,280px)_120px_130px_100px_minmax(150px,180px)] gap-3";
 
 /** The Paid cell — tender when settled, what's owed when not. Logic lives in
- * ./payment-chip so it can be unit tested. */
+ * components/shared/payment-chip so it can be unit tested, and so Service can
+ * show the same chip. */
 function PaymentBadge({ sale }: { sale: SaleRow }) {
   const chip = paymentChipFor({
     paymentStatus: sale.paymentStatus,

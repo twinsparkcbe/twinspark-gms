@@ -2,10 +2,15 @@ import { balanceDueFor as sharedBalanceDueFor, type PaymentMode, type PaymentSta
 import { formatINR } from "@/lib/format";
 
 /**
- * The Paid column's chip (doc/payment-split-scope.md §7). Pure logic in a
- * .ts file rather than inline JSX so it can be unit tested — Vitest runs in a
- * `node` environment with no React testing library (same reason
+ * The payment chip (doc/payment-split-scope.md §7) — the Paid column in
+ * Sales, and the Amount column in Service. Pure logic in a .ts file rather
+ * than inline JSX so it can be unit tested — Vitest runs in a `node`
+ * environment with no React testing library (same reason
  * components/service/service-filter-state.ts exists).
+ *
+ * Lives in components/shared/ rather than components/sales/ because Service
+ * shows the same chip: a module reaching into another module's folder for a
+ * helper is the coupling lib/input-masks.ts was created to avoid.
  *
  * Tender and settlement are shown in one chip on purpose: the owner scanning
  * the list wants "did I get the money, and how" as a single glance, and two
@@ -59,7 +64,7 @@ export function paymentChipFor(input: {
 }
 
 /**
- * Thin adapter so the Sales table can pass a `SaleRow` straight through.
+ * Thin adapter so a Sales or Service row can be passed straight through.
  * The rule itself lives in services/shared/payment.ts — it has to match what
  * the invoice prints.
  */

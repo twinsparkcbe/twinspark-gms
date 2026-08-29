@@ -561,6 +561,18 @@ export async function updateServiceJobStatus(
 }
 
 /**
+ * P0001 covers two different messages. deduct_service_job_stock() (0038)
+ * raises a written-out "Not enough stock: <part> (need N, have M); ..." that
+ * is meant for the mechanic and should reach them intact. adjust_stock()'s
+ * own raise still says "Insufficient stock, or item <uuid> not found" — a
+ * raw database id, which nobody at a garage counter can act on — so that one
+ * is replaced with the generic wording.
+ */
+function insufficientStockMessage(dbMessage: string, fallback: string): string {
+  return dbMessage.startsWith("Not enough stock:") ? dbMessage : fallback;
+}
+
+/**
  * The one function that finalizes a Service Job (doc §7): deducts stock for
  * every inventory-usage line via the existing adjust_stock() (reason
  * SERVICE_USAGE), assigns the invoice number, computes final totals, and
@@ -571,7 +583,11 @@ export async function completeServiceJob(supabase: SupabaseClient<Database>, ser
   const { error } = await supabase.rpc("complete_service_job", { p_service_job_id: serviceJobId });
 
   if (error) {
-    if (error.code === "P0001") throw new InsufficientStockError("Not enough stock available for one of the parts used on this job.");
+    if (error.code === "P0001") {
+      throw new InsufficientStockError(
+        insufficientStockMessage(error.message, "Not enough stock available for one of the parts used on this job.")
+      );
+    }
     if (error.code === "P0002") throw new ServiceJobNotFoundError(serviceJobId);
     if (error.code === "42501") throw new StockAdjustmentAuthError("You don't have permission to complete Service Jobs.");
     if (error.code === "22023") throw new ServiceJobValidationError(error.message);
@@ -680,7 +696,11 @@ export async function editCompletedServiceJob(
   });
 
   if (error) {
-    if (error.code === "P0001") throw new InsufficientStockError("Not enough stock available for one of the parts on the corrected job.");
+    if (error.code === "P0001") {
+      throw new InsufficientStockError(
+        insufficientStockMessage(error.message, "Not enough stock available for one of the parts on the corrected job.")
+      );
+    }
     if (error.code === "P0002") throw new ServiceJobNotFoundError(serviceJobId);
     if (error.code === "42501") throw new StockAdjustmentAuthError("Only Administrators can edit a completed Service Job.");
     if (error.code === "22023") throw new ServiceJobValidationError(error.message);
