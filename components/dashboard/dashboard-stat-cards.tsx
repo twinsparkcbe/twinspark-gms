@@ -70,14 +70,20 @@ function StripCell({
   value,
   valueClassName,
   delta,
+  title,
 }: {
   label: string;
   value: string;
   valueClassName?: string;
   delta?: React.ReactNode;
+  /** Hover text. Used for detail that would otherwise need a second line —
+   * every cell in this strip must stay exactly two lines tall (label, then
+   * value), because one taller cell pushes the whole row down and leaves the
+   * other six with dead space under their values. */
+  title?: string;
 }) {
   return (
-    <div className="bg-white p-4">
+    <div className="bg-white p-4" title={title}>
       <p className="truncate text-xs font-medium text-neutral-500">{label}</p>
       <div className="mt-1 flex items-baseline gap-2">
         <p className={cn("truncate text-xl font-bold tracking-tight text-neutral-900", valueClassName)}>{value}</p>
@@ -109,7 +115,9 @@ export function DashboardStatCards({
   comparisonLabel?: string;
 }) {
   const isProfit = stats.profit >= 0;
-  const totalRevenue = stats.salesAmount + stats.serviceAmount;
+  // Online is part of the shop's revenue for the margin calculation — the
+  // same three channels Profit is built from.
+  const totalRevenue = stats.salesAmount + stats.serviceAmount + stats.onlineAmount;
   const margin = computeMarginPercent(stats.profit, totalRevenue);
 
   return (
@@ -141,7 +149,7 @@ export function DashboardStatCards({
           // Spelled out because Profit here is NOT sales minus purchases —
           // without this the owner reads ₹5,400 sales against ₹27,000
           // purchases and expects a loss.
-          hint="sales + service − COGS"
+          hint="sales + service + online − COGS"
           value={formatINR(stats.profit)}
           valueClassName={isProfit ? undefined : "text-danger"}
           aside={margin === null ? undefined : formatMarginPercent(margin)}
@@ -151,12 +159,12 @@ export function DashboardStatCards({
         />
       </div>
 
-      {/* Uneven column widths at the lg breakpoint (all 6 cells in one row):
-          the money cells (Purchases/Cash/UPI) need enough room for a ₹ value
-          plus a delta arrow without truncating, while Track Tyre's plain
+      {/* Uneven column widths at the lg breakpoint (all 7 cells in one row):
+          the money cells (Purchases/Online/Cash/UPI) need enough room for a ₹
+          value plus a delta arrow without truncating, while Track Tyre's plain
           stock counts (2-3 digits) don't need nearly as much — an equal
-          6-way split was clipping "₹1,58,600" mid-number. */}
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-neutral-200 bg-neutral-200 shadow-sm md:grid-cols-3 lg:grid-cols-[1.3fr_0.7fr_1.1fr_1.1fr_0.6fr_0.6fr]">
+          split was clipping "₹1,58,600" mid-number. */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-neutral-200 bg-neutral-200 shadow-sm md:grid-cols-3 lg:grid-cols-[1.15fr_1.15fr_0.65fr_1fr_1fr_0.55fr_0.55fr] [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-3 lg:[&>*:last-child]:col-span-1">
         <StripCell
           label={`Purchases (${rangeLabel})`}
           value={formatINR(stats.purchaseAmount)}
@@ -168,12 +176,29 @@ export function DashboardStatCards({
             />
           }
         />
+        {/* The online channel's own figure, never folded into Sales Amount —
+            "Sales" means the Sales module on every screen, so that card still
+            reconciles against the Sales Report
+            (doc/online-orders-revenue-scope.md §2). Counts orders DISPATCHED
+            in the range: the moment the tyres leave, which is also when the
+            stock movement and its cost land. */}
+        <StripCell
+          label={`Online Orders (${rangeLabel})`}
+          value={formatINR(stats.onlineAmount)}
+          title={`${stats.onlineOrderCount.toLocaleString("en-IN")} order${stats.onlineOrderCount === 1 ? "" : "s"} dispatched`}
+          delta={<MetricDelta current={stats.onlineAmount} previous={stats.previous.onlineAmount} />}
+        />
+        {/* Sales-module bills only — the online count sits on the card above
+            rather than being added in here, so this still matches the number
+            of rows on the Sales page. */}
         <StripCell label={`Invoices (${rangeLabel})`} value={stats.totalSalesCount.toLocaleString("en-IN")} />
         {/* Live snapshot of what actually came in as cash/UPI this range
             (getCollectionsReport, services/reports/collections.ts) — no
             previous-period delta, matching Invoices/Track Tyre below rather
             than the money cards above (doc/dashboard-redesign-scope.md
-            addendum). */}
+            addendum). UPI now includes dispatched online orders: the customer
+            always pays through the QR before submitting, so there is no cash
+            case for that channel. */}
         <StripCell label={`Cash Collected (${rangeLabel})`} value={formatINR(stats.cashCollected)} />
         <StripCell label={`UPI Collected (${rangeLabel})`} value={formatINR(stats.upiCollected)} />
         <StripCell label="Track Tyre · Front" value={stockValue(stats.trackTyreStock.front)} />

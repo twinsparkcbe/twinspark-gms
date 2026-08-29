@@ -101,7 +101,13 @@ export function SidebarNav({
 
       <div className="mx-5 h-px shrink-0 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Main">
+      {/* overscroll-contain stops a flick at the end of the nav from scrolling
+          the page behind it. scrollbar-slim-dark replaces the browser default,
+          which renders as a light grey stripe on this dark panel. */}
+      <nav
+        className="scrollbar-slim-dark flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-4"
+        aria-label="Main"
+      >
         {visibleItems.map((item) => {
           const isActive = item.href === activeHref;
           const Icon = item.icon;

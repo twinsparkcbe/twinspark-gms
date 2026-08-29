@@ -6,10 +6,17 @@ import { getCollectionsReport } from "./collections";
 const RANGE = { from: new Date("2026-08-01T00:00:00.000Z"), to: new Date("2026-08-31T23:59:59.000Z") };
 const AT = "2026-08-14T06:00:00.000Z"; // 11:30am IST on 14 Aug
 
-function mockTwoQueries(sales: unknown[], service: unknown[], errors?: { sales?: string; service?: string }) {
+function mockTwoQueries(
+  sales: unknown[],
+  service: unknown[],
+  errors?: { sales?: string; service?: string; online?: string },
+  online: unknown[] = []
+) {
+  // Queued in the order getCollectionsReport fires them: sales, service, online.
   const results = [
     { data: errors?.sales ? null : sales, error: errors?.sales ? { message: errors.sales } : null },
     { data: errors?.service ? null : service, error: errors?.service ? { message: errors.service } : null },
+    { data: errors?.online ? null : online, error: errors?.online ? { message: errors.online } : null },
   ];
   let call = 0;
   return {
@@ -140,5 +147,43 @@ describe("getCollectionsReport", () => {
   it("PAY-101b: propagates a service query error", async () => {
     const supabase = mockTwoQueries([], [], { service: "kaboom" });
     await expect(getCollectionsReport(supabase, RANGE)).rejects.toThrow("kaboom");
+  });
+});
+
+describe("getCollectionsReport — online orders", () => {
+  const onlineOrder = (overrides: Record<string, unknown> = {}) => ({
+    total_amount: 4500,
+    dispatched_at: AT,
+    ...overrides,
+  });
+
+  // An online customer pays through the QR before the order can even be
+  // submitted, so the whole amount is UPI and nothing is ever outstanding.
+  it("counts a dispatched online order wholly as UPI, with nothing outstanding", async () => {
+    const supabase = mockTwoQueries([], [], undefined, [onlineOrder()]);
+
+    const report = await getCollectionsReport(supabase, RANGE);
+
+    expect(report.upi).toBe(4500);
+    expect(report.cash).toBe(0);
+    expect(report.outstanding).toBe(0);
+    expect(report.unrecorded).toBe(0);
+    expect(report.totalBilled).toBe(4500);
+  });
+
+  it("dates an online order by its dispatch day, alongside sales on the same day", async () => {
+    const supabase = mockTwoQueries([sale()], [], undefined, [onlineOrder()]);
+
+    const report = await getCollectionsReport(supabase, RANGE);
+
+    expect(report.days).toHaveLength(1);
+    expect(report.days[0].upi).toBe(5500); // 1000 from the split sale + 4500 online
+    expect(report.days[0].cash).toBe(1000);
+  });
+
+  it("throws when the online query errors", async () => {
+    const supabase = mockTwoQueries([], [], { online: "online boom" });
+
+    await expect(getCollectionsReport(supabase, RANGE)).rejects.toThrow("online boom");
   });
 });

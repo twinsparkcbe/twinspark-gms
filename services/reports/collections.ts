@@ -11,10 +11,17 @@ import { IST_OFFSET_MS, MONTH_ABBR } from "@/lib/format";
  * billed actually came in, split by tender, so the cash box can be
  * reconciled against the bank.
  *
- * Covers Sales + COMPLETED Service jobs. Online Orders are excluded, matching
- * the scope note that already keeps Revenue and Profit consistent across
- * screens — broadening one report's definition of "money in" without the
- * others would make the numbers stop agreeing.
+ * Covers Sales, COMPLETED Service jobs, and DISPATCHED Online Orders
+ * (doc/online-orders-revenue-scope.md §3.2). Online money lands wholly in
+ * the UPI column: the customer pays through the QR on the order page before
+ * the order can be submitted, so there is no cash case and nothing
+ * outstanding — an online order is always settled in full by the time staff
+ * see it.
+ *
+ * Online orders are dated by `dispatched_at`, not by when the customer paid.
+ * That keeps revenue in the same period as the stock movement. The
+ * trade-off, accepted deliberately: money that reached the UPI account on
+ * Monday shows in Tuesday's column if the tyres go out on Tuesday.
  *
  * `unrecorded` is a deliberate, visible bucket rather than a rounding of
  * history into cash: rows written before 0027 are settled bills whose tender
@@ -71,7 +78,7 @@ export async function getCollectionsReport(
   const fromIso = range.from.toISOString();
   const toIso = range.to.toISOString();
 
-  const [salesRes, serviceRes] = await Promise.all([
+  const [salesRes, serviceRes, onlineRes] = await Promise.all([
     // Voided sales are corrections, not revenue (0029) — excluded from every
     // figure that adds up to money.
     supabase
@@ -86,10 +93,17 @@ export async function getCollectionsReport(
       .eq("status", "COMPLETED")
       .gte("completed_at", fromIso)
       .lte("completed_at", toIso),
+    supabase
+      .from("online_orders")
+      .select("total_amount, dispatched_at")
+      .eq("status", "DISPATCHED")
+      .gte("dispatched_at", fromIso)
+      .lte("dispatched_at", toIso),
   ]);
 
   if (salesRes.error) throw new Error(salesRes.error.message);
   if (serviceRes.error) throw new Error(serviceRes.error.message);
+  if (onlineRes.error) throw new Error(onlineRes.error.message);
 
   const rows: CollectionSourceRow[] = [
     ...((salesRes.data ?? []) as Record<string, unknown>[]).map((row) => ({
@@ -107,6 +121,18 @@ export async function getCollectionsReport(
       cash_amount: row.cash_amount as number | null,
       upi_amount: row.upi_amount as number | null,
       at: row.completed_at as string | null,
+    })),
+    // Shaped to look like a fully-paid UPI bill so it flows through the same
+    // loop below rather than needing a parallel code path: payment_mode is
+    // set so it is never counted as "unrecorded", and upi_amount equals the
+    // total so nothing is left outstanding.
+    ...((onlineRes.data ?? []) as Record<string, unknown>[]).map((row) => ({
+      grand_total: row.total_amount as number | null,
+      payment_status: "PAID" as string | null,
+      payment_mode: "UPI" as string | null,
+      cash_amount: 0 as number | null,
+      upi_amount: row.total_amount as number | null,
+      at: row.dispatched_at as string | null,
     })),
   ];
 

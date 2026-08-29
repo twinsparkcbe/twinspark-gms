@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getPurchaseStats } from "@/services/purchases";
 import { getCollectionsReport } from "@/services/reports";
+import { getOnlineRevenue } from "@/services/online-orders";
 import { getSalesStats } from "@/services/sales";
 import { getServiceStats } from "@/services/service";
 import { mapRow, SELECT_COLUMNS, type InventoryItemJoinedRow, type InventoryItemRow } from "@/services/inventory/items";
@@ -54,6 +55,7 @@ export async function getTrackTyreStock(supabase: SupabaseClient<Database>): Pro
 export interface PreviousPeriodStats {
   salesAmount: number;
   serviceAmount: number;
+  onlineAmount: number;
   purchaseAmount: number;
   profit: number;
 }
@@ -78,11 +80,20 @@ export interface DashboardStats {
    * a garage that runs mostly on service work isn't shown a permanently
    * understated Profit. */
   serviceAmount: number;
-  /** FIFO cost of the units sold through Sales *and* the parts consumed by
-   * completed Service Jobs in the selected range (see getCostOfGoodsSold) —
-   * what Profit is really computed from. */
+  /** What the online channel earned in the selected range — the total
+   * charged on orders DISPATCHED in it (doc/online-orders-revenue-scope.md
+   * §3.1). Deliberately its own figure rather than folded into salesAmount:
+   * "Sales" means the Sales module everywhere in this app, so salesAmount
+   * still reconciles exactly against the Sales Report. */
+  onlineAmount: number;
+  /** How many orders that was. */
+  onlineOrderCount: number;
+  /** FIFO cost of the units sold through Sales, the parts consumed by
+   * completed Service Jobs, *and* the tyres shipped on online orders in the
+   * selected range (see getCostOfGoodsSold) — what Profit is really computed
+   * from. */
   costOfGoodsSold: number;
-  /** (salesAmount + serviceAmount) - costOfGoodsSold — profit on what was
+  /** (salesAmount + serviceAmount + onlineAmount) - costOfGoodsSold — profit on what was
    * actually sold/serviced this range, not "revenue minus whatever was
    * bought this range" (that conflated restocking cash-outlay with cost of
    * goods sold, and could read as a loss in a big-restock month even on a
@@ -96,7 +107,9 @@ export interface DashboardStats {
    * full report can never disagree on what counts as "cash." Excludes voided
    * sales and FREE_SERVICE jobs, same as every other money figure here. */
   cashCollected: number;
-  /** Same tender-split, UPI side (getCollectionsReport().upi). */
+  /** Same tender-split, UPI side (getCollectionsReport().upi) — which now
+   * also carries every dispatched online order, since an online customer
+   * always pays through the QR before the order is submitted. */
   upiCollected: number;
   /** Same figures over the comparison window (see resolvePreviousPeriod). */
   previous: PreviousPeriodStats;
@@ -137,9 +150,11 @@ export async function getDashboardStats(
     trackTyreStock,
     costOfGoodsSold,
     collections,
+    onlineRevenue,
     prevSales,
     prevPurchases,
     prevService,
+    prevOnline,
     prevCogs,
   ] = await Promise.all([
     getSalesStats(supabase, resolvedRange),
@@ -148,9 +163,11 @@ export async function getDashboardStats(
     getTrackTyreStock(supabase),
     getCostOfGoodsSold(supabase, resolvedRange),
     getCollectionsReport(supabase, resolvedRange),
+    getOnlineRevenue(supabase, resolvedRange),
     getSalesStats(supabase, previousRange),
     getPurchaseStats(supabase, previousRange),
     getServiceStats(supabase, previousRange),
+    getOnlineRevenue(supabase, previousRange),
     getCostOfGoodsSold(supabase, previousRange),
   ]);
 
@@ -160,15 +177,20 @@ export async function getDashboardStats(
     purchaseAmount: purchaseStats.totalPurchaseAmount,
     salesAmount: salesStats.totalSalesAmount,
     serviceAmount: serviceStats.grossCompletedRevenue,
+    onlineAmount: onlineRevenue.amount,
+    onlineOrderCount: onlineRevenue.orderCount,
     costOfGoodsSold,
-    profit: salesStats.totalSalesAmount + serviceStats.grossCompletedRevenue - costOfGoodsSold,
+    profit:
+      salesStats.totalSalesAmount + serviceStats.grossCompletedRevenue + onlineRevenue.amount - costOfGoodsSold,
     cashCollected: collections.cash,
     upiCollected: collections.upi,
     previous: {
       salesAmount: prevSales.totalSalesAmount,
       serviceAmount: prevService.grossCompletedRevenue,
+      onlineAmount: prevOnline.amount,
       purchaseAmount: prevPurchases.totalPurchaseAmount,
-      profit: prevSales.totalSalesAmount + prevService.grossCompletedRevenue - prevCogs,
+      profit:
+        prevSales.totalSalesAmount + prevService.grossCompletedRevenue + prevOnline.amount - prevCogs,
     },
   };
 }

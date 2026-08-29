@@ -10,6 +10,7 @@ export interface RevenuePoint {
   fullLabel: string;
   salesAmount: number;
   serviceAmount: number;
+  onlineAmount: number;
 }
 
 /**
@@ -21,10 +22,11 @@ export interface RevenuePoint {
  * `services/dashboard/buckets.ts`) as Dashboard's chart so the two screens
  * read consistently.
  *
- * Online Order revenue is excluded — same scope note already agreed for
- * the Dashboard's Profit figure (doc/dashboard-scope.md addendum): revenue
- * and cost stay on the same footing, and broadening one without the other
- * would silently change what "revenue" means between screens.
+ * Online Order revenue is its own third series alongside Sales and Service
+ * (doc/online-orders-revenue-scope.md §3.2), never folded into salesAmount —
+ * "Sales" means the Sales module on every screen in this app, so that column
+ * still reconciles against the Sales Report. Online orders are bucketed by
+ * `dispatched_at`, the moment the stock leaves.
  */
 export async function getRevenueTrend(
   supabase: SupabaseClient<Database>,
@@ -35,7 +37,7 @@ export async function getRevenueTrend(
   const rangeStart = buckets[0].start.toISOString();
   const rangeEnd = buckets[buckets.length - 1].end.toISOString();
 
-  const [salesRes, serviceRes] = await Promise.all([
+  const [salesRes, serviceRes, onlineRes] = await Promise.all([
     // Voided sales are corrections, not revenue (0029) — excluded from every
     // figure that adds up to money.
     supabase
@@ -50,13 +52,21 @@ export async function getRevenueTrend(
       .eq("status", "COMPLETED")
       .gte("completed_at", rangeStart)
       .lt("completed_at", rangeEnd),
+    supabase
+      .from("online_orders")
+      .select("total_amount, dispatched_at")
+      .eq("status", "DISPATCHED")
+      .gte("dispatched_at", rangeStart)
+      .lt("dispatched_at", rangeEnd),
   ]);
 
   if (salesRes.error) throw new Error(salesRes.error.message);
   if (serviceRes.error) throw new Error(serviceRes.error.message);
+  if (onlineRes.error) throw new Error(onlineRes.error.message);
 
   const salesTotals = new Array(buckets.length).fill(0) as number[];
   const serviceTotals = new Array(buckets.length).fill(0) as number[];
+  const onlineTotals = new Array(buckets.length).fill(0) as number[];
 
   for (const row of (salesRes.data ?? []) as { grand_total: number; sale_date: string }[]) {
     const idx = findBucketIndex(buckets, row.sale_date);
@@ -69,10 +79,17 @@ export async function getRevenueTrend(
     if (idx >= 0) serviceTotals[idx] += Number(row.grand_total);
   }
 
+  for (const row of (onlineRes.data ?? []) as { total_amount: number; dispatched_at: string | null }[]) {
+    if (!row.dispatched_at) continue;
+    const idx = findBucketIndex(buckets, row.dispatched_at);
+    if (idx >= 0) onlineTotals[idx] += Number(row.total_amount);
+  }
+
   return buckets.map((b, i) => ({
     label: b.label,
     fullLabel: b.fullLabel,
     salesAmount: salesTotals[i],
     serviceAmount: serviceTotals[i],
+    onlineAmount: onlineTotals[i],
   }));
 }

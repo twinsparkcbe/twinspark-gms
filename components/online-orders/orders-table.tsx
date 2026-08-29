@@ -1,6 +1,7 @@
 "use client";
 
-import { Eye, PackageSearch, Truck, XCircle } from "lucide-react";
+import Link from "next/link";
+import { Eye, FileText, PackageSearch, Truck, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -145,6 +146,22 @@ export function OnlineOrdersTable({
           >
             <XCircle className="size-4" />
             {labelled && "Reject"}
+          </Button>
+        )}
+
+        {/* Dispatched only — the invoice number is assigned at dispatch
+            (0037), so there is nothing to print before then. */}
+        {order.status === "DISPATCHED" && order.invoiceNumber && (
+          <Button
+            asChild
+            variant="ghost"
+            size={size}
+            className={cn(base, "text-neutral-500 hover:text-neutral-900")}
+          >
+            <Link href={`/online-orders/${order.id}/invoice`} aria-label="View invoice" title={`Invoice ${order.invoiceNumber}`}>
+              <FileText className="size-4" />
+              {labelled && "Invoice"}
+            </Link>
           </Button>
         )}
       </>

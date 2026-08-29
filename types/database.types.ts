@@ -1269,6 +1269,9 @@ export interface Database {
           /** Generated (0036) — true when the customer entered an amount that
            * differs from the catalogue-computed one. Never writable. */
           amount_is_overridden: boolean;
+          /** TW-O-000001 series (0037), assigned once at dispatch. Null until
+           * then — an order that is waiting or rejected has no invoice. */
+          invoice_number: string | null;
           status: OnlineOrderStatus;
           rejection_reason: string | null;
           submitted_at: string;
@@ -1295,6 +1298,7 @@ export interface Database {
           unit_price_back?: number | null;
           computed_amount?: number;
           total_amount?: number;
+          invoice_number?: string | null;
           status?: OnlineOrderStatus;
           rejection_reason?: string | null;
           submitted_at?: string;
@@ -1321,6 +1325,7 @@ export interface Database {
           unit_price_back?: number | null;
           computed_amount?: number;
           total_amount?: number;
+          invoice_number?: string | null;
           status?: OnlineOrderStatus;
           rejection_reason?: string | null;
           submitted_at?: string;

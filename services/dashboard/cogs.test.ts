@@ -33,13 +33,23 @@ describe("getCostOfGoodsSold", () => {
     expect(cogs).toBe(1600);
   });
 
-  it("filters stock_movements to reason IN ('SALE', 'SERVICE_USAGE'), not SALE alone", async () => {
+  it("also sums ONLINE_ORDER_DISPATCH movements, so an online sale's cost is not lost", async () => {
+    // Before this, tyres shipped online left the shelf with neither their
+    // sale price nor their cost recorded anywhere — Profit silently ignored
+    // the whole channel.
+    const supabase = mockStockMovements([{ delta: -2, purchase_entries: { unit_price: 1500 } }]);
+
+    const cogs = await getCostOfGoodsSold(supabase, RANGE);
+    expect(cogs).toBe(3000);
+  });
+
+  it("filters stock_movements to reason IN ('SALE', 'SERVICE_USAGE', 'ONLINE_ORDER_DISPATCH')", async () => {
     const builder = createQueryBuilderMock({ data: [], error: null });
     const supabase = { from: () => builder } as unknown as Parameters<typeof getCostOfGoodsSold>[0];
 
     await getCostOfGoodsSold(supabase, RANGE);
 
-    expect(builder.in).toHaveBeenCalledWith("reason", ["SALE", "SERVICE_USAGE"]);
+    expect(builder.in).toHaveBeenCalledWith("reason", ["SALE", "SERVICE_USAGE", "ONLINE_ORDER_DISPATCH"]);
   });
 
   it("handles a single SALE split across two FIFO batches (same sale, two movement rows)", async () => {
