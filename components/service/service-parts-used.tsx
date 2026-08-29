@@ -47,8 +47,14 @@ const STACKED_CELL = "col-start-2 md:col-start-auto";
  *
  * Deliberately does NOT call adjust_stock: adding a row is pure data entry
  * while the job is Draft/In Progress; deduction happens exactly once,
- * atomically, at completion (doc §6/§7). The "Only N in stock" hint is
- * advisory and never blocks.
+ * atomically, at completion (doc §6/§7).
+ *
+ * The per-row "Only N in stock right now" hint stays advisory — a draft may
+ * legitimately list a part that is on order. Billing is what gets blocked,
+ * and that check lives in the form (services/service/stock-check.ts) because
+ * it has to sum an item across rows: two rows of 2 against a stock of 3 is
+ * short even though neither row is short on its own. When it fires, the
+ * quantity field carries a red "Not enough stock." in place of this hint.
  */
 export function ServicePartsUsed({
   parts,
