@@ -124,3 +124,44 @@
     @apply bg-muted text-foreground font-sans;
   }
 }
+
+/*
+ * Slim scrollbars for the app's own scroll areas.
+ *
+ * The browser default is a ~15px bar with an opaque light track. On the dark
+ * sidebar that reads as a grey stripe bolted onto the panel — the widest,
+ * highest-contrast thing on a surface whose whole job is to recede. macOS
+ * hides it until you scroll, so it only shows up for people running
+ * "Always show scrollbars" or Chrome on Windows, which is exactly the sort
+ * of difference that never surfaces in development.
+ *
+ * Dark-surface only, because that is the only place the default is actually
+ * offensive. A light-surface twin would need a dark thumb (white at low
+ * opacity vanishes on white) — worth adding if the dropdowns and long tables
+ * ever warrant it, but an unused utility is just dead weight in here.
+ */
+@utility scrollbar-slim-dark {
+  scrollbar-width: thin;
+  /* Firefox: thumb, then track. Transparent track means no stripe at all. */
+  scrollbar-color: rgb(255 255 255 / 0.16) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: rgb(255 255 255 / 0.16);
+  }
+  /* Firmer once the pointer is actually in the scroll area, so it is easy to
+     grab without being visible the rest of the time. */
+  &:hover {
+    scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+  }
+  &:hover::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.28);
+  }
+}

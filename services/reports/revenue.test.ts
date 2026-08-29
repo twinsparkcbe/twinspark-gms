@@ -6,8 +6,12 @@ import { getRevenueTrend } from "./revenue";
 // Fixed "today" — same fixture date used by Dashboard's trend tests.
 const NOW = new Date("2026-07-29T10:00:00.000Z");
 
-function mockTwoQueries(salesResult: { data: unknown; error: unknown }, serviceResult: { data: unknown; error: unknown }) {
-  const results = [salesResult, serviceResult];
+type Result = { data: unknown; error: unknown };
+const EMPTY: Result = { data: [], error: null };
+
+/** Queued in the order getRevenueTrend fires them: sales, service, online. */
+function mockTwoQueries(salesResult: Result, serviceResult: Result, onlineResult: Result = EMPTY) {
+  const results = [salesResult, serviceResult, onlineResult];
   let call = 0;
   return {
     from: () => createQueryBuilderMock(results[call++] as never),
@@ -51,7 +55,29 @@ describe("getRevenueTrend", () => {
     const points = await getRevenueTrend(supabase, "monthly", NOW);
 
     expect(points).toHaveLength(6);
-    expect(points.every((p) => p.salesAmount === 0 && p.serviceAmount === 0)).toBe(true);
+    expect(points.every((p) => p.salesAmount === 0 && p.serviceAmount === 0 && p.onlineAmount === 0)).toBe(true);
+  });
+
+  // Online orders are bucketed by dispatched_at — the moment the tyres leave
+  // — so revenue lands in the same bucket as the stock movement.
+  it("buckets dispatched online orders by dispatched_at, separately from Sales", async () => {
+    const online = [{ total_amount: 3600, dispatched_at: NOW.toISOString() }];
+    const supabase = mockTwoQueries({ data: [], error: null }, { data: [], error: null }, { data: online, error: null });
+
+    const points = await getRevenueTrend(supabase, "daily", NOW);
+
+    expect(points[13].onlineAmount).toBe(3600);
+    // Never folded into Sales — that column still means the Sales module.
+    expect(points[13].salesAmount).toBe(0);
+  });
+
+  it("ignores an online order with no dispatch timestamp", async () => {
+    const online = [{ total_amount: 999, dispatched_at: null }];
+    const supabase = mockTwoQueries({ data: [], error: null }, { data: [], error: null }, { data: online, error: null });
+
+    const points = await getRevenueTrend(supabase, "daily", NOW);
+
+    expect(points.reduce((sum, p) => sum + p.onlineAmount, 0)).toBe(0);
   });
 
   it("throws when the sales query errors", async () => {

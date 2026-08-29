@@ -27,6 +27,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
     <div className="rounded-[10px] border border-neutral-200 bg-white px-3 py-2 shadow-md">
       <p className="text-xs font-medium text-neutral-500">{point.fullLabel}</p>
       <p className="text-sm text-neutral-700">Sales: {formatINR(point.salesAmount)}</p>
+      <p className="text-sm text-neutral-700">Online: {formatINR(point.onlineAmount)}</p>
       <p className="text-sm text-neutral-700">Cost of Goods Sold: {formatINR(point.cogs)}</p>
       <p className={cn("text-sm font-bold", point.profit >= 0 ? "text-success" : "text-danger")}>Profit: {formatINR(point.profit)}</p>
     </div>
@@ -38,16 +39,21 @@ const STAT_CARD_CLASS = "rounded-xl border border-neutral-200 bg-white p-5 shado
 export function ProfitReportClient({ daily, weekly, monthly }: { daily: ProfitPoint[]; weekly: ProfitPoint[]; monthly: ProfitPoint[] }) {
   const [granularity, setGranularity] = useState<TrendGranularity>("daily");
   const data = granularity === "daily" ? daily : granularity === "weekly" ? weekly : monthly;
-  const hasActivity = data.some((p) => p.salesAmount > 0 || p.cogs > 0);
+  const hasActivity = data.some((p) => p.salesAmount > 0 || p.onlineAmount > 0 || p.cogs > 0);
 
   const totalSales = data.reduce((sum, p) => sum + p.salesAmount, 0);
+  const totalOnline = data.reduce((sum, p) => sum + p.onlineAmount, 0);
   const totalCogs = data.reduce((sum, p) => sum + p.cogs, 0);
-  const totalProfit = totalSales - totalCogs;
+  // Profit here covers the two channels that sell goods — the Sales module
+  // and Online Orders. Service is not in this report at all
+  // (doc/online-orders-revenue-scope.md §3.2).
+  const totalProfit = totalSales + totalOnline - totalCogs;
   const isProfit = totalProfit >= 0;
 
   const PROFIT_COLUMNS: XlsxColumn<ProfitPoint>[] = [
     { header: "Period", accessor: (p) => p.fullLabel },
     { header: "Sales Amount", accessor: (p) => p.salesAmount },
+    { header: "Online Amount", accessor: (p) => p.onlineAmount },
     { header: "Cost of Goods Sold", accessor: (p) => p.cogs },
     { header: "Profit", accessor: (p) => p.profit },
   ];
@@ -68,10 +74,14 @@ export function ProfitReportClient({ daily, weekly, monthly }: { daily: ProfitPo
         <DownloadXlsxButton onClick={handleDownload} disabled={data.length === 0} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className={STAT_CARD_CLASS}>
           <p className="text-sm font-medium text-neutral-500">Sales Amount (shown period)</p>
           <p className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">{formatINR(totalSales)}</p>
+        </div>
+        <div className={STAT_CARD_CLASS}>
+          <p className="text-sm font-medium text-neutral-500">Online Amount (shown period)</p>
+          <p className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">{formatINR(totalOnline)}</p>
         </div>
         <div className={STAT_CARD_CLASS}>
           <p className="text-sm font-medium text-neutral-500">Cost of Goods Sold (shown period)</p>
@@ -90,7 +100,7 @@ export function ProfitReportClient({ daily, weekly, monthly }: { daily: ProfitPo
 
       <div className="rounded-[14px] border border-neutral-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-neutral-900">Sales vs. Cost of Goods Sold</h2>
+          <h2 className="text-lg font-bold text-neutral-900">Revenue vs. Cost of Goods Sold</h2>
           <Tabs value={granularity} onValueChange={(v) => setGranularity(v as TrendGranularity)}>
             <TabsList>
               {GRANULARITY_TABS.map((tab) => (
@@ -112,6 +122,7 @@ export function ProfitReportClient({ daily, weekly, monthly }: { daily: ProfitPo
                 <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--color-neutral-50)" }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="salesAmount" name="Sales" fill="var(--color-success)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Bar dataKey="onlineAmount" name="Online" fill="var(--color-channel-purple)" radius={[4, 4, 0, 0]} maxBarSize={32} />
                 <Bar dataKey="cogs" name="Cost of Goods Sold" fill="var(--color-warning)" radius={[4, 4, 0, 0]} maxBarSize={32} />
               </BarChart>
             </ResponsiveContainer>

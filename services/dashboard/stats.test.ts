@@ -4,12 +4,14 @@ vi.mock("@/services/sales", () => ({ getSalesStats: vi.fn() }));
 vi.mock("@/services/purchases", () => ({ getPurchaseStats: vi.fn() }));
 vi.mock("@/services/service", () => ({ getServiceStats: vi.fn() }));
 vi.mock("@/services/reports", () => ({ getCollectionsReport: vi.fn() }));
+vi.mock("@/services/online-orders", () => ({ getOnlineRevenue: vi.fn() }));
 vi.mock("./cogs", () => ({ getCostOfGoodsSold: vi.fn() }));
 
 import { getSalesStats } from "@/services/sales";
 import { getPurchaseStats } from "@/services/purchases";
 import { getServiceStats } from "@/services/service";
 import { getCollectionsReport } from "@/services/reports";
+import { getOnlineRevenue } from "@/services/online-orders";
 import { getCostOfGoodsSold } from "./cogs";
 
 import { createQueryBuilderMock } from "../../test/supabase-query-mock";
@@ -211,6 +213,7 @@ describe("getDashboardStats", () => {
     // them specifically.
     vi.mocked(getServiceStats).mockResolvedValue(zeroServiceStats);
     vi.mocked(getCollectionsReport).mockResolvedValue(zeroCollections);
+    vi.mocked(getOnlineRevenue).mockResolvedValue({ amount: 0, orderCount: 0 });
   });
 
   it("composes salesAmount, serviceAmount, purchaseAmount, totalSalesCount, and costOfGoodsSold from the underlying functions", async () => {
@@ -372,6 +375,7 @@ describe("getDashboardStats — previous period", () => {
   beforeEach(() => {
     vi.mocked(getServiceStats).mockResolvedValue(zeroServiceStats);
     vi.mocked(getCollectionsReport).mockResolvedValue(zeroCollections);
+    vi.mocked(getOnlineRevenue).mockResolvedValue({ amount: 0, orderCount: 0 });
   });
 
   it("queries a second, earlier window that ends before the selected range starts", async () => {
@@ -429,7 +433,13 @@ describe("getDashboardStats — previous period", () => {
     const stats = await getDashboardStats(emptySupabase());
 
     expect(stats.profit).toBe(2500); // (5400 + 1000) - 3900
-    expect(stats.previous).toEqual({ salesAmount: 4580, serviceAmount: 800, purchaseAmount: 19000, profit: 1990 }); // (4580 + 800) - 3390
+    expect(stats.previous).toEqual({
+      salesAmount: 4580,
+      serviceAmount: 800,
+      onlineAmount: 0,
+      purchaseAmount: 19000,
+      profit: 1990,
+    }); // (4580 + 800 + 0) - 3390
   });
 
   it("returns zeroed previous figures for a first-ever period instead of omitting them", async () => {
@@ -442,6 +452,61 @@ describe("getDashboardStats — previous period", () => {
     vi.mocked(getCostOfGoodsSold).mockResolvedValueOnce(3900).mockResolvedValueOnce(0);
 
     const stats = await getDashboardStats(emptySupabase());
-    expect(stats.previous).toEqual({ salesAmount: 0, serviceAmount: 0, purchaseAmount: 0, profit: 0 });
+    expect(stats.previous).toEqual({ salesAmount: 0, serviceAmount: 0, onlineAmount: 0, purchaseAmount: 0, profit: 0 });
+  });
+});
+
+describe("getDashboardStats — online orders", () => {
+  const emptySupabase = () => sequencedSupabase([{ data: [], error: null }]);
+  const zeroServiceStats = { grossCompletedRevenue: 0, collectedRevenue: 0, completedJobCount: 0 };
+  const zeroCollections = { cash: 0, upi: 0, unrecorded: 0, outstanding: 0, totalBilled: 0, days: [] };
+
+  beforeEach(() => {
+    vi.mocked(getSalesStats).mockResolvedValue({ totalSalesAmount: 0, saleCount: 0 });
+    vi.mocked(getPurchaseStats).mockResolvedValue({ totalPurchaseAmount: 0, entryCount: 0 });
+    vi.mocked(getServiceStats).mockResolvedValue(zeroServiceStats);
+    vi.mocked(getCollectionsReport).mockResolvedValue(zeroCollections);
+    vi.mocked(getCostOfGoodsSold).mockResolvedValue(0);
+    vi.mocked(getOnlineRevenue).mockResolvedValue({ amount: 0, orderCount: 0 });
+  });
+
+  it("surfaces online revenue as its own figure, never folded into salesAmount", async () => {
+    vi.mocked(getSalesStats).mockResolvedValue({ totalSalesAmount: 50000, saleCount: 12 });
+    vi.mocked(getOnlineRevenue).mockResolvedValue({ amount: 9000, orderCount: 3 });
+
+    const stats = await getDashboardStats(emptySupabase());
+
+    expect(stats.onlineAmount).toBe(9000);
+    expect(stats.onlineOrderCount).toBe(3);
+    // "Sales" means the Sales module everywhere in this app, so this still
+    // reconciles exactly against the Sales Report.
+    expect(stats.salesAmount).toBe(50000);
+  });
+
+  it("includes online revenue in Profit", async () => {
+    vi.mocked(getSalesStats).mockResolvedValue({ totalSalesAmount: 10000, saleCount: 2 });
+    vi.mocked(getServiceStats).mockResolvedValue({
+      grossCompletedRevenue: 5000,
+      collectedRevenue: 5000,
+      completedJobCount: 1,
+    });
+    vi.mocked(getOnlineRevenue).mockResolvedValue({ amount: 4000, orderCount: 1 });
+    vi.mocked(getCostOfGoodsSold).mockResolvedValue(6000);
+
+    const stats = await getDashboardStats(emptySupabase());
+
+    // 10000 sales + 5000 service + 4000 online − 6000 cost
+    expect(stats.profit).toBe(13000);
+  });
+
+  it("compares against the previous period's online revenue too", async () => {
+    vi.mocked(getOnlineRevenue)
+      .mockResolvedValueOnce({ amount: 9000, orderCount: 3 })
+      .mockResolvedValueOnce({ amount: 4000, orderCount: 1 });
+
+    const stats = await getDashboardStats(emptySupabase());
+
+    expect(stats.onlineAmount).toBe(9000);
+    expect(stats.previous.onlineAmount).toBe(4000);
   });
 });

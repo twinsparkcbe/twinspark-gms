@@ -24,12 +24,13 @@ function firstBatch(batch: EmbeddedBatch): { unit_price: number } | null {
  * `unit_price` gives the real, batch-accurate cost of what was sold/used, no
  * averaging or approximation.
  *
- * Scoped to reason IN ('SALE', 'SERVICE_USAGE') — deliberately excludes
- * Online Order dispatches (reason='ONLINE_ORDER_DISPATCH'), matching what
- * getSalesStats().totalSalesAmount + getServiceStats().grossCompletedRevenue
- * already count (in-store Sales module invoices + completed Service Jobs).
- * Revenue and cost stay on the same footing; broadening both to include
- * Online Orders is a separate decision, not made here.
+ * Scoped to reason IN ('SALE', 'SERVICE_USAGE', 'ONLINE_ORDER_DISPATCH') —
+ * the three ways stock leaves for money. Online dispatches were added
+ * (doc/online-orders-revenue-scope.md §3.3) at the same time as their
+ * revenue: before that the tyres left the shelf with neither their sale
+ * price nor their cost recorded anywhere. Revenue and cost must stay on the
+ * same footing — widening one without the other would make Profit wrong in
+ * a direction nobody would notice.
  *
  * SERVICE_USAGE was added alongside Dashboard Profit now folding in Service
  * Job revenue (doc/dashboard-redesign-scope.md addendum) — a service that
@@ -47,7 +48,7 @@ export async function getCostOfGoodsSold(
   const { data, error } = await supabase
     .from("stock_movements")
     .select("delta, purchase_entries!inner(unit_price)")
-    .in("reason", ["SALE", "SERVICE_USAGE"])
+    .in("reason", ["SALE", "SERVICE_USAGE", "ONLINE_ORDER_DISPATCH"])
     .gte("created_at", range.from.toISOString())
     .lte("created_at", range.to.toISOString());
 
@@ -58,7 +59,7 @@ export async function getCostOfGoodsSold(
   return rows.reduce((sum, row) => {
     const batch = firstBatch(row.purchase_entries);
     if (!batch) return sum;
-    // delta is negative for a SALE consumption — flip sign for a positive cost.
+    // delta is negative for a consumption — flip sign for a positive cost.
     return sum + -row.delta * Number(batch.unit_price);
   }, 0);
 }

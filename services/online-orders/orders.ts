@@ -77,6 +77,9 @@ export interface OnlineOrderRow {
   /** True when the two differ — surfaced at Verify Payment so a quoted
    * price is checked by a human rather than passing silently. */
   amountIsOverridden: boolean;
+  /** TW-O-000001 series, assigned once at dispatch (0037). Null on any order
+   * that has not been dispatched — that is what gates the Invoice button. */
+  invoiceNumber: string | null;
   status: OnlineOrderStatus;
   rejectionReason: string | null;
   submittedAt: string;
@@ -105,6 +108,7 @@ type OnlineOrderDbRow = {
   computed_amount: number;
   total_amount: number;
   amount_is_overridden: boolean;
+  invoice_number: string | null;
   status: OnlineOrderStatus;
   rejection_reason: string | null;
   submitted_at: string;
@@ -120,7 +124,7 @@ type OnlineOrderDbRow = {
 };
 
 const SELECT_COLUMNS =
-  "id, customer_name, mobile_number, address, pin_code, quantity_front, quantity_back, payment_screenshot_path, unit_price_front, unit_price_back, computed_amount, total_amount, amount_is_overridden, status, rejection_reason, submitted_at, verified_by, verified_at, approved_by, approved_at, dispatched_by, dispatched_at, rejected_by, rejected_at, created_at";
+  "id, customer_name, mobile_number, address, pin_code, quantity_front, quantity_back, payment_screenshot_path, unit_price_front, unit_price_back, computed_amount, total_amount, amount_is_overridden, invoice_number, status, rejection_reason, submitted_at, verified_by, verified_at, approved_by, approved_at, dispatched_by, dispatched_at, rejected_by, rejected_at, created_at";
 
 function mapOnlineOrder(row: OnlineOrderDbRow): OnlineOrderRow {
   return {
@@ -137,6 +141,7 @@ function mapOnlineOrder(row: OnlineOrderDbRow): OnlineOrderRow {
     computedAmount: Number(row.computed_amount),
     totalAmount: Number(row.total_amount),
     amountIsOverridden: row.amount_is_overridden,
+    invoiceNumber: row.invoice_number,
     status: row.status,
     rejectionReason: row.rejection_reason,
     submittedAt: row.submitted_at,
@@ -362,6 +367,28 @@ async function countByStatus(supabase: SupabaseClient<Database>, status: OnlineO
  * OnlineOrderRow.totalAmount, added in 0019_online_orders_pricing.sql).
  * Dispatched-this-month is the one exception, included as a simple
  * throughput indicator. */
+export class OnlineOrderNotFoundError extends Error {
+  constructor() {
+    super("Order not found.");
+    this.name = "OnlineOrderNotFoundError";
+  }
+}
+
+/**
+ * One order by id — the invoice page's only read. Deliberately not filtered
+ * by status here: the page itself decides that a non-dispatched order has no
+ * invoice, so the distinction between "no such order" and "not invoiceable
+ * yet" stays visible rather than both collapsing into a 404.
+ */
+export async function getOnlineOrder(supabase: SupabaseClient<Database>, id: string): Promise<OnlineOrderRow> {
+  const { data, error } = await supabase.from("online_orders").select(SELECT_COLUMNS).eq("id", id).maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new OnlineOrderNotFoundError();
+
+  return mapOnlineOrder(data as unknown as OnlineOrderDbRow);
+}
+
 export async function getOnlineOrderStats(supabase: SupabaseClient<Database>): Promise<OnlineOrderStats> {
   const [submittedCount, paymentVerifiedCount, approvedCount, dispatchedThisMonthCount] = await Promise.all([
     countByStatus(supabase, "SUBMITTED"),
@@ -407,6 +434,47 @@ export interface OnlineOrdersReportStats {
  * moved through the channel *in this period*, keyed off each event's own
  * timestamp (`created_at`, `dispatched_at`, `rejected_at`).
  */
+/**
+ * What the online channel actually earned in a range — the figure the
+ * Dashboard shows as its own card and folds into Profit and UPI Collected
+ * (doc/online-orders-revenue-scope.md §3).
+ *
+ * Only DISPATCHED orders count, keyed off `dispatched_at`: that is the
+ * moment the tyres leave the shelf, so revenue and the stock movement always
+ * land in the same period. An order that is paid but not yet sent is money in
+ * the bank, not yet earned.
+ *
+ * Deliberately a separate one-query function rather than reusing
+ * getOnlineOrdersReportStats() — the Dashboard runs this twice (current and
+ * comparison window) on every load and has no use for the submitted/rejected
+ * counts that function also fetches.
+ */
+export interface OnlineRevenue {
+  amount: number;
+  orderCount: number;
+}
+
+export async function getOnlineRevenue(
+  supabase: SupabaseClient<Database>,
+  range: { from: Date; to: Date }
+): Promise<OnlineRevenue> {
+  const { data, error } = await supabase
+    .from("online_orders")
+    .select("total_amount")
+    .eq("status", "DISPATCHED")
+    .gte("dispatched_at", range.from.toISOString())
+    .lte("dispatched_at", range.to.toISOString());
+
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as { total_amount: number }[];
+
+  return {
+    amount: rows.reduce((sum, row) => sum + Number(row.total_amount), 0),
+    orderCount: rows.length,
+  };
+}
+
 export async function getOnlineOrdersReportStats(
   supabase: SupabaseClient<Database>,
   range: { from: Date; to: Date }

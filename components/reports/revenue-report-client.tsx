@@ -28,6 +28,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
       <p className="text-xs font-medium text-neutral-500">{point.fullLabel}</p>
       <p className="text-sm font-bold text-neutral-900">Sales: {formatINR(point.salesAmount)}</p>
       <p className="text-sm font-bold text-neutral-900">Service: {formatINR(point.serviceAmount)}</p>
+      <p className="text-sm font-bold text-neutral-900">Online: {formatINR(point.onlineAmount)}</p>
     </div>
   );
 }
@@ -51,15 +52,17 @@ function StatCard({ label, value }: { label: string; value: string }) {
 export function RevenueReportClient({ daily, weekly, monthly }: { daily: RevenuePoint[]; weekly: RevenuePoint[]; monthly: RevenuePoint[] }) {
   const [granularity, setGranularity] = useState<TrendGranularity>("daily");
   const data = granularity === "daily" ? daily : granularity === "weekly" ? weekly : monthly;
-  const hasActivity = data.some((p) => p.salesAmount > 0 || p.serviceAmount > 0);
+  const hasActivity = data.some((p) => p.salesAmount > 0 || p.serviceAmount > 0 || p.onlineAmount > 0);
 
   const totalSales = data.reduce((sum, p) => sum + p.salesAmount, 0);
   const totalService = data.reduce((sum, p) => sum + p.serviceAmount, 0);
+  const totalOnline = data.reduce((sum, p) => sum + p.onlineAmount, 0);
 
   const REVENUE_COLUMNS: XlsxColumn<RevenuePoint>[] = [
     { header: "Period", accessor: (p) => p.fullLabel },
     { header: "Sales Amount", accessor: (p) => p.salesAmount },
     { header: "Service Amount", accessor: (p) => p.serviceAmount },
+    { header: "Online Amount", accessor: (p) => p.onlineAmount },
   ];
 
   function handleDownload() {
@@ -78,9 +81,10 @@ export function RevenueReportClient({ daily, weekly, monthly }: { daily: Revenue
         <DownloadXlsxButton onClick={handleDownload} disabled={data.length === 0} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label={`Sales Revenue (shown period)`} value={formatINR(totalSales)} />
         <StatCard label={`Service Revenue (shown period)`} value={formatINR(totalService)} />
+        <StatCard label={`Online Revenue (shown period)`} value={formatINR(totalOnline)} />
       </div>
 
       <div className="rounded-[14px] border border-neutral-200 bg-white p-5 shadow-sm">
@@ -108,6 +112,7 @@ export function RevenueReportClient({ daily, weekly, monthly }: { daily: Revenue
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="salesAmount" name="Sales" fill="var(--color-brand-red)" radius={[4, 4, 0, 0]} maxBarSize={32} />
                 <Bar dataKey="serviceAmount" name="Service" fill="var(--color-info)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Bar dataKey="onlineAmount" name="Online" fill="var(--color-channel-purple)" radius={[4, 4, 0, 0]} maxBarSize={32} />
               </BarChart>
             </ResponsiveContainer>
           ) : (

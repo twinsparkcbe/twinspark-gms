@@ -5,8 +5,12 @@ import { getProfitTrend } from "./profit";
 
 const NOW = new Date("2026-07-29T10:00:00.000Z");
 
-function mockTwoQueries(salesResult: { data: unknown; error: unknown }, cogsResult: { data: unknown; error: unknown }) {
-  const results = [salesResult, cogsResult];
+type Result = { data: unknown; error: unknown };
+const EMPTY: Result = { data: [], error: null };
+
+/** Queued in the order getProfitTrend fires them: sales, online, COGS. */
+function mockTwoQueries(salesResult: Result, cogsResult: Result, onlineResult: Result = EMPTY) {
+  const results = [salesResult, onlineResult, cogsResult];
   let call = 0;
   return {
     from: () => createQueryBuilderMock(results[call++] as never),
@@ -72,5 +76,42 @@ describe("getProfitTrend", () => {
     const supabase = mockTwoQueries({ data: [], error: null }, { data: null, error: { message: "boom" } });
 
     await expect(getProfitTrend(supabase, "daily", NOW)).rejects.toThrow("boom");
+  });
+});
+
+describe("getProfitTrend — online orders", () => {
+  // Revenue and cost must move together: an online dispatch that added its
+  // sale price but not its cost would overstate profit, which is exactly the
+  // failure mode that made this change necessary.
+  it("counts dispatched online revenue and its ONLINE_ORDER_DISPATCH cost in the same bucket", async () => {
+    const online = [{ total_amount: 4500, dispatched_at: NOW.toISOString() }];
+    const cogsRows = [{ delta: -2, created_at: NOW.toISOString(), purchase_entries: { unit_price: 1500 } }];
+    const supabase = mockTwoQueries(
+      { data: [], error: null },
+      { data: cogsRows, error: null },
+      { data: online, error: null }
+    );
+
+    const points = await getProfitTrend(supabase, "daily", NOW);
+
+    expect(points[13].onlineAmount).toBe(4500);
+    expect(points[13].cogs).toBe(3000);
+    expect(points[13].profit).toBe(1500);
+    // Kept out of salesAmount so that column still reconciles with the Sales Report.
+    expect(points[13].salesAmount).toBe(0);
+  });
+
+  it("adds Sales and Online together in profit", async () => {
+    const sales = [{ grand_total: 2000, sale_date: NOW.toISOString() }];
+    const online = [{ total_amount: 3000, dispatched_at: NOW.toISOString() }];
+    const supabase = mockTwoQueries(
+      { data: sales, error: null },
+      { data: [], error: null },
+      { data: online, error: null }
+    );
+
+    const points = await getProfitTrend(supabase, "daily", NOW);
+
+    expect(points[13].profit).toBe(5000);
   });
 });
