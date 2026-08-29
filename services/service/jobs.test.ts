@@ -284,6 +284,31 @@ describe("completeServiceJob", () => {
     expect(result.invoiceNumber).toBe("TW-J-000001");
   });
 
+  // 0038: the RPC now names every short part and the numbers. That message
+  // is written for the mechanic, so it must survive the service layer intact
+  // rather than being flattened to "one of the parts".
+  it("passes the named-shortfall message through instead of the generic one", async () => {
+    const builder = createQueryBuilderMock({ data: null, error: null });
+    const dbMessage = "Not enough stock: CHAIN SPROCKET - MT (need 3, have 1); MOTUL - 7100 (need 2, have 0)";
+    const supabase = createSupabaseMock(builder, { data: null, error: { code: "P0001", message: dbMessage } });
+
+    await expect(completeServiceJob(supabase, "44444444-4444-4444-8444-444444444401")).rejects.toThrow(dbMessage);
+  });
+
+  // adjust_stock's own raise still names the item by uuid, which is no use to
+  // anyone at a counter — that one stays behind the generic wording.
+  it("hides adjust_stock's raw uuid message behind the generic wording", async () => {
+    const builder = createQueryBuilderMock({ data: null, error: null });
+    const supabase = createSupabaseMock(builder, {
+      data: null,
+      error: { code: "P0001", message: "Insufficient stock, or item 9f03067c-1111-2222-3333-444444444444 not found" },
+    });
+
+    await expect(completeServiceJob(supabase, "44444444-4444-4444-8444-444444444401")).rejects.toThrow(
+      "Not enough stock available for one of the parts used on this job."
+    );
+  });
+
   it("throws InsufficientStockError on P0001 (a usage line exceeds available stock)", async () => {
     const builder = createQueryBuilderMock({ data: null, error: null });
     const supabase = createSupabaseMock(builder, { data: null, error: { code: "P0001", message: "insufficient" } });
