@@ -1,3 +1,4 @@
+import { canSetServicePaymentStatus } from "@/lib/auth/permissions";
 import { requireServiceAccess } from "@/lib/auth/require-service-access";
 import { toISTDateInput } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -41,6 +42,7 @@ export default async function NewServiceJobPage() {
       combos={combos}
       usageCounts={usageCounts}
       mechanics={mechanics}
+      canRecordPayment={canSetServicePaymentStatus(role)}
       defaultAssignedMechanicId={role === "mechanic" ? userId : undefined}
       defaultExpectedDeliveryDate={toISTDateInput(new Date().toISOString())}
     />

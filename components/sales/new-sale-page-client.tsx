@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarDays, FileText, Percent, ShoppingCart, User, UserCog, Wrench } from "lucide-react";
@@ -188,6 +188,20 @@ export function NewSalePageClient({
   // decision, so it's never remembered against a customer or an item.
   const [fittingDismissed, setFittingDismissed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /**
+   * A ref, not the isSubmitting state beside it. Two reasons, both of which
+   * produced duplicate records on the Service list:
+   *
+   * 1. State does not change until React re-renders, so two clicks in the
+   *    same frame both read isSubmitting === false and both submit. A ref
+   *    flips synchronously.
+   * 2. isSubmitting used to be cleared BEFORE router.push(). Navigation is
+   *    async, so on a slow connection the form sat there with the button
+   *    live again for a second or more after a successful save — staff saw
+   *    nothing happen and pressed again. On success the lock is never
+   *    released: the form stays disabled until the next page replaces it.
+   */
+  const submitLock = useRef(false);
   const [errors, setErrors] = useState<{
     customerName?: string;
     customerMobile?: string;
@@ -452,20 +466,27 @@ export function NewSalePageClient({
       ),
     };
 
+    if (submitLock.current) return;
+    submitLock.current = true;
     setIsSubmitting(true);
     const result = await runWithLoader(() =>
       isEdit ? editSaleAction({ saleId: existingSale!.id, input }) : recordSaleAction(input)
     );
-    setIsSubmitting(false);
 
-    if (result.success) {
+    if (!result.success) {
+      // Only a failure hands the form back, so only a failure releases it.
+      submitLock.current = false;
+      setIsSubmitting(false);
+      setErrors((prev) => ({ ...prev, form: result.error }));
+      toast.error(result.error);
+      return;
+    }
+
+    {
       toast.success(isEdit ? `Invoice ${result.data.invoiceNumber} updated.` : `Sale recorded — Invoice ${result.data.invoiceNumber}.`);
       // Straight to the printable invoice (doc/billing-invoice-scope.md §4)
       // — the customer is typically still at the counter waiting for a bill.
       router.push(`/sales/${result.data.id}/invoice`);
-    } else {
-      setErrors((prev) => ({ ...prev, form: result.error }));
-      toast.error(result.error);
     }
   }
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { AutoPrintInvoice } from "@/components/sales/auto-print-invoice";
 import { PrintInvoiceButton } from "@/components/sales/print-invoice-button";
+import { BusinessContacts } from "@/components/shared/business-contacts";
 import type { ServiceInvoiceView as ServiceInvoiceViewModel } from "@/services/shared/invoice";
 
 /**
@@ -57,6 +58,7 @@ export function ServiceInvoiceView({ invoice }: { invoice: ServiceInvoiceViewMod
                 GSTIN: <span className="font-mono">{business.gstin}</span>
               </p>
             )}
+            <BusinessContacts contacts={business.contacts} />
           </div>
         </div>
 

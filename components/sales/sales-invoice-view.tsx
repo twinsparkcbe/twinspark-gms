@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/shared/brand-mark";
+import { BusinessContacts } from "@/components/shared/business-contacts";
 import type { SalesInvoiceView as SalesInvoiceViewModel } from "@/services/shared/invoice";
 
 import { AutoPrintInvoice } from "./auto-print-invoice";
@@ -76,6 +77,7 @@ export function SalesInvoiceView({ invoice }: { invoice: SalesInvoiceViewModel }
                 GSTIN: <span className="font-mono">{business.gstin}</span>
               </p>
             )}
+            <BusinessContacts contacts={business.contacts} />
           </div>
         </div>
 

@@ -28,6 +28,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
       <p className="text-xs font-medium text-neutral-500">{point.fullLabel}</p>
       <p className="text-sm text-neutral-700">Sales: {formatINR(point.salesAmount)}</p>
       <p className="text-sm text-neutral-700">Online: {formatINR(point.onlineAmount)}</p>
+      <p className="text-sm text-neutral-700">Service: {formatINR(point.serviceAmount)}</p>
       <p className="text-sm text-neutral-700">Cost of Goods Sold: {formatINR(point.cogs)}</p>
       <p className={cn("text-sm font-bold", point.profit >= 0 ? "text-success" : "text-danger")}>Profit: {formatINR(point.profit)}</p>
     </div>
@@ -39,21 +40,23 @@ const STAT_CARD_CLASS = "rounded-xl border border-neutral-200 bg-white p-5 shado
 export function ProfitReportClient({ daily, weekly, monthly }: { daily: ProfitPoint[]; weekly: ProfitPoint[]; monthly: ProfitPoint[] }) {
   const [granularity, setGranularity] = useState<TrendGranularity>("daily");
   const data = granularity === "daily" ? daily : granularity === "weekly" ? weekly : monthly;
-  const hasActivity = data.some((p) => p.salesAmount > 0 || p.onlineAmount > 0 || p.cogs > 0);
+  const hasActivity = data.some((p) => p.salesAmount > 0 || p.onlineAmount > 0 || p.serviceAmount > 0 || p.cogs > 0);
 
   const totalSales = data.reduce((sum, p) => sum + p.salesAmount, 0);
   const totalOnline = data.reduce((sum, p) => sum + p.onlineAmount, 0);
+  const totalService = data.reduce((sum, p) => sum + p.serviceAmount, 0);
   const totalCogs = data.reduce((sum, p) => sum + p.cogs, 0);
-  // Profit here covers the two channels that sell goods — the Sales module
-  // and Online Orders. Service is not in this report at all
-  // (doc/online-orders-revenue-scope.md §3.2).
-  const totalProfit = totalSales + totalOnline - totalCogs;
+  // All three earning channels, matching the Dashboard's Profit card exactly:
+  // the Sales module, Online Orders, and Service. Cost of Goods Sold covers
+  // the same three, so revenue and cost always move together.
+  const totalProfit = totalSales + totalOnline + totalService - totalCogs;
   const isProfit = totalProfit >= 0;
 
   const PROFIT_COLUMNS: XlsxColumn<ProfitPoint>[] = [
     { header: "Period", accessor: (p) => p.fullLabel },
     { header: "Sales Amount", accessor: (p) => p.salesAmount },
     { header: "Online Amount", accessor: (p) => p.onlineAmount },
+    { header: "Service Amount", accessor: (p) => p.serviceAmount },
     { header: "Cost of Goods Sold", accessor: (p) => p.cogs },
     { header: "Profit", accessor: (p) => p.profit },
   ];
@@ -69,26 +72,37 @@ export function ProfitReportClient({ daily, weekly, monthly }: { daily: ProfitPo
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900">Profit Report</h1>
-          <p className="mt-1 text-sm text-neutral-500">Sales Amount minus actual Cost of Goods Sold — Sales-only, same as the Dashboard.</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            Sales, Online and Service revenue minus the actual Cost of Goods Sold — the same figure as the Dashboard.
+          </p>
         </div>
         <DownloadXlsxButton onClick={handleDownload} disabled={data.length === 0} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Five cards now, so 4 across would leave one stranded on its own
+          row. Three then two at lg, all five once there is room at xl.
+          Each label reserves two lines (min-h-10): "Cost of Goods Sold
+          (shown period)" wraps at five-across while the others don't, and
+          without the reservation its value sat lower than the rest. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className={STAT_CARD_CLASS}>
-          <p className="text-sm font-medium text-neutral-500">Sales Amount (shown period)</p>
+          <p className="min-h-10 text-sm font-medium text-neutral-500">Sales Amount (shown period)</p>
           <p className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">{formatINR(totalSales)}</p>
         </div>
         <div className={STAT_CARD_CLASS}>
-          <p className="text-sm font-medium text-neutral-500">Online Amount (shown period)</p>
+          <p className="min-h-10 text-sm font-medium text-neutral-500">Online Amount (shown period)</p>
           <p className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">{formatINR(totalOnline)}</p>
         </div>
         <div className={STAT_CARD_CLASS}>
-          <p className="text-sm font-medium text-neutral-500">Cost of Goods Sold (shown period)</p>
+          <p className="min-h-10 text-sm font-medium text-neutral-500">Service Amount (shown period)</p>
+          <p className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">{formatINR(totalService)}</p>
+        </div>
+        <div className={STAT_CARD_CLASS}>
+          <p className="min-h-10 text-sm font-medium text-neutral-500">Cost of Goods Sold (shown period)</p>
           <p className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">{formatINR(totalCogs)}</p>
         </div>
         <div className={STAT_CARD_CLASS}>
-          <div className="flex items-center gap-2">
+          <div className="flex min-h-10 items-center gap-2">
             <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", isProfit ? "bg-success-bg text-success" : "bg-danger-bg text-danger")}>
               {isProfit ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
             </div>
@@ -123,11 +137,12 @@ export function ProfitReportClient({ daily, weekly, monthly }: { daily: ProfitPo
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="salesAmount" name="Sales" fill="var(--color-success)" radius={[4, 4, 0, 0]} maxBarSize={32} />
                 <Bar dataKey="onlineAmount" name="Online" fill="var(--color-channel-purple)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Bar dataKey="serviceAmount" name="Service" fill="var(--color-info)" radius={[4, 4, 0, 0]} maxBarSize={32} />
                 <Bar dataKey="cogs" name="Cost of Goods Sold" fill="var(--color-warning)" radius={[4, 4, 0, 0]} maxBarSize={32} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-sm text-neutral-500">No Sales activity in this period yet.</p>
+            <p className="text-sm text-neutral-500">No Sales, Online or Service activity in this period yet.</p>
           )}
         </div>
       </div>

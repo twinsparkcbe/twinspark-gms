@@ -64,10 +64,22 @@ export function canManageServiceCatalog(role: UserRole): boolean {
   return role === "admin";
 }
 
-/** Cash reconciliation stays with the owner: a Mechanic can complete a job
- * and hand the bike over, but not mark the invoice paid. */
+/**
+ * Marking a Service Job's invoice paid, and with what tender.
+ *
+ * Was Administrator-only, on a cash-reconciliation argument: a Mechanic could
+ * finish the job and hand the bike over, but only the owner said it had been
+ * paid for. In this shop the person billing at the counter is the person
+ * taking the money and is not always the owner, so every job they completed
+ * sat at PENDING waiting on someone else.
+ *
+ * Now: anyone with Service access. A Sales Person has none, so this still
+ * excludes them. Mirrored by has_service_access() inside
+ * update_service_payment_status() (0039) — the database is the real gate;
+ * this only decides what gets rendered.
+ */
 export function canSetServicePaymentStatus(role: UserRole): boolean {
-  return role === "admin";
+  return canAccessModule(role, "service");
 }
 
 /**

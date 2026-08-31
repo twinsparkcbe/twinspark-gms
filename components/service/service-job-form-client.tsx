@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -91,6 +91,7 @@ export function ServiceJobFormClient({
   combos = [],
   usageCounts,
   mechanics = [],
+  canRecordPayment,
   defaultAssignedMechanicId,
   defaultExpectedDeliveryDate,
 }: {
@@ -108,6 +109,20 @@ export function ServiceJobFormClient({
   usageCounts?: UsageCounts;
   /** Active Mechanics for the assignment picker (doc/mechanic-role-scope.md §5). */
   mechanics?: MechanicOption[];
+  /**
+   * Whether this user may stamp the tender on a job — canSetServicePaymentStatus(),
+   * Administrator-only today.
+   *
+   * Required, not defaulted, so a new page cannot forget it and silently get
+   * the old behaviour back. That behaviour was: show a Mechanic the Cash/UPI
+   * picker, let them choose, complete the job — creating the invoice and
+   * deducting the stock — and only THEN call the admin-only
+   * update_service_payment_status(), which refuses. The job was already
+   * billed, but the screen said "Only Administrators can update payment
+   * status", so it read as a total failure and the natural response was to
+   * press the button again, which made a second job.
+   */
+  canRecordPayment: boolean;
   /** Pre-selects the signed-in Mechanic on a new job — they are almost
    * always assigning themselves. Ignored when editing an existing job. */
   defaultAssignedMechanicId?: string;
@@ -230,6 +245,25 @@ export function ServiceJobFormClient({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /**
+   * Why a ref and not the isSubmitting state above.
+   *
+   * Two duplicate-job routes were open here, and this closes both.
+   *
+   * 1. React state does not change until a re-render. Two clicks landing in
+   *    the same frame BOTH read isSubmitting === false, and both submit. A
+   *    ref flips synchronously, so the second click sees the lock the first
+   *    one set.
+   *
+   * 2. The bigger one: isSubmitting used to be cleared BEFORE
+   *    router.push(). Navigation is async — it fetches the destination
+   *    route — so on a slow connection the form stayed on screen with the
+   *    button live again for a second or more after a successful save. Staff
+   *    saw nothing happen and pressed again, creating a second job. On
+   *    success the lock is now deliberately never released: the form stays
+   *    disabled until the next page replaces it.
+   */
+  const submitLock = useRef(false);
   const [errors, setErrors] = useState<{
     customerName?: string;
     customerMobile?: string;
@@ -458,7 +492,9 @@ export function ServiceJobFormClient({
 
     // Only relevant on the Complete path — a Draft save records no payment —
     // but validating unconditionally keeps one code path instead of two.
-    const nextPaymentErrors = validatePayment(draftToPaymentInput(paymentDraft), grandTotal);
+    const nextPaymentErrors = canRecordPayment
+      ? validatePayment(draftToPaymentInput(paymentDraft), grandTotal)
+      : {};
 
     setErrors(next);
     setLineErrors(nextLineErrors);
@@ -558,6 +594,8 @@ export function ServiceJobFormClient({
 
     const input = buildInput();
 
+    if (submitLock.current) return;
+    submitLock.current = true;
     setIsSubmitting(true);
     const result = await runWithLoader(() => {
       if (isCompletedEdit) {
@@ -571,9 +609,18 @@ export function ServiceJobFormClient({
       }
       return isEdit ? updateServiceJobAction(existingJob!.id, input) : createServiceJobAction(input);
     });
-    setIsSubmitting(false);
 
-    if (result.success) {
+    if (!result.success) {
+      // Only a failure hands the form back to the user, so only a failure
+      // releases the lock.
+      submitLock.current = false;
+      setIsSubmitting(false);
+      setErrors((prev) => ({ ...prev, form: result.error }));
+      toast.error(result.error);
+      return;
+    }
+
+    {
       if (isCompletedEdit) {
         // Straight to the corrected bill — the whole point of the correction is
         // usually that the customer is standing there waiting for it.
@@ -583,9 +630,6 @@ export function ServiceJobFormClient({
       }
       toast.success(isEdit ? `Service Job ${result.data.jobNumber} updated.` : `Service Job ${result.data.jobNumber} created.`);
       router.push(`/service/${result.data.id}`);
-    } else {
-      setErrors((prev) => ({ ...prev, form: result.error }));
-      toast.error(result.error);
     }
   }
 
@@ -611,28 +655,35 @@ export function ServiceJobFormClient({
 
     const input = buildInput();
 
+    if (submitLock.current) return;
+    submitLock.current = true;
     setIsSubmitting(true);
     const result = await runWithLoader(() =>
       saveAndCompleteServiceJobAction({
         serviceJobId: isEdit ? existingJob!.id : undefined,
         input,
         // "Not paid yet" leaves the job at PENDING, so it surfaces in
-        // "awaiting payment" instead of looking settled.
-        payment: draftToPaymentInput(paymentDraft),
+        // "awaiting payment" instead of looking settled. Omitted entirely
+        // when this user may not set it: saveAndCompleteServiceJob() skips
+        // the admin-only call when payment is undefined, so the completion
+        // succeeds instead of failing after the invoice already exists.
+        payment: canRecordPayment ? draftToPaymentInput(paymentDraft) : undefined,
         // Same idea for handover — unticked leaves the job's delivery status
         // where completion put it, so it stays on the "to hand over" list.
         deliveryStatus: vehicleDelivered ? "DELIVERED" : undefined,
       }),
     );
-    setIsSubmitting(false);
 
-    if (result.success) {
-      toast.success(`Service Job ${result.data.jobNumber} completed — Invoice ${result.data.invoiceNumber}.`);
-      router.push(`/service/${result.data.id}/invoice`);
-    } else {
+    if (!result.success) {
+      submitLock.current = false;
+      setIsSubmitting(false);
       setErrors((prev) => ({ ...prev, form: result.error }));
       toast.error(result.error);
+      return;
     }
+
+    toast.success(`Service Job ${result.data.jobNumber} completed — Invoice ${result.data.invoiceNumber}.`);
+    router.push(`/service/${result.data.id}/invoice`);
   }
 
   // Same target as the Cancel button at the bottom: an edit returns to the
@@ -999,20 +1050,40 @@ export function ServiceJobFormClient({
                 <Label className="text-sm font-semibold text-neutral-900">Job Done? Bill It Now</Label>
               </div>
               <p className="mb-3 text-xs text-neutral-500">
-                If the work is finished, mark payment and complete the job in one step — stock deducts, the invoice is generated, and you&apos;re taken
-                straight to it.
+                {canRecordPayment
+                  ? "If the work is finished, mark payment and complete the job in one step — stock deducts, the invoice is generated, and you're taken straight to it."
+                  : "If the work is finished, complete the job here — stock deducts, the invoice is generated, and you're taken straight to it."}
               </p>
               <div className="space-y-3">
-                <PaymentCapture
-                  grandTotal={grandTotal}
-                  draft={paymentDraft}
-                  errors={paymentErrors}
-                  onChange={(next) => {
-                    setPaymentDraft(next);
-                    setPaymentErrors({});
-                  }}
-                  className="border-neutral-200"
-                />
+                {canRecordPayment ? (
+                  <PaymentCapture
+                    grandTotal={grandTotal}
+                    draft={paymentDraft}
+                    errors={paymentErrors}
+                    onChange={(next) => {
+                      setPaymentDraft(next);
+                      setPaymentErrors({});
+                    }}
+                    className="border-neutral-200"
+                  />
+                ) : (
+                  /* Shown instead of the Cash/UPI picker rather than beside a
+                     disabled one: a control you are not allowed to use is
+                     worse than no control, and this is the screen where
+                     pressing on regardless used to bill the job and then
+                     report a permission failure. */
+                  <div className="rounded-[10px] border border-neutral-200 bg-neutral-50 p-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-sm font-medium text-neutral-700">Payment</span>
+                      <span className="text-sm font-bold text-neutral-900">Bill total {formatINR(grandTotal)}</span>
+                    </div>
+                    <p className="mt-1.5 text-xs text-neutral-500">
+                      Only an Administrator can record how the customer paid. Complete the job now — the invoice is
+                      generated and it shows as <span className="font-medium text-danger">Pending</span> until an
+                      Administrator marks it paid from the Service list.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">
                     <Checkbox checked={vehicleDelivered} onCheckedChange={(v) => setVehicleDelivered(v === true)} />

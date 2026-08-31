@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardList, History, IndianRupee, Pencil, Printer, Receipt, RotateCcw, StickyNote, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, History, IndianRupee, Pencil, Printer, Receipt, RotateCcw, StickyNote, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -138,6 +138,18 @@ export function ServiceJobDetailClient({
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      {/* Same treatment as the edit screen's back link, so the two read as one
+          flow. A plain Link to /service rather than router.back(): this page is
+          reached from the list, from a saved job, from an invoice and from a
+          notification, and "back" should always mean the Service list rather
+          than whichever of those the browser happened to come from. */}
+      <Button asChild variant="secondary" size="sm" className="rounded-[10px]">
+        <Link href="/service">
+          <ArrowLeft className="size-4" />
+          Back to Service
+        </Link>
+      </Button>
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-2.5">
           <ClipboardList className="mt-1 size-6 shrink-0 text-primary" />

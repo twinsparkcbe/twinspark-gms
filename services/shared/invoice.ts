@@ -27,6 +27,15 @@ export interface BusinessInfo {
   phone?: string;
   /** Omitted entirely (no row rendered) until a real number is supplied. */
   gstin?: string;
+  /**
+   * Phone numbers printed in the top-right of every bill, grouped by what
+   * each line is for. A group carries a list rather than one number because
+   * the online desk runs two lines, and a customer needs to see both.
+   *
+   * Separate from `phone` above, which is the single number the header shows
+   * under the address. Both may be set; neither renders when absent.
+   */
+  contacts?: { label: string; numbers: string[] }[];
 }
 
 export interface InvoiceLineView {

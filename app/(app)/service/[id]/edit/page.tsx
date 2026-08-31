@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { canSetServicePaymentStatus } from "@/lib/auth/permissions";
 import { requireServiceAccess } from "@/lib/auth/require-service-access";
 import { createClient } from "@/lib/supabase/server";
 import { listSellableCombos } from "@/services/combos";
@@ -70,6 +71,7 @@ export default async function EditServiceJobPage({ params }: { params: Promise<P
       combos={combos}
       usageCounts={usageCounts}
       mechanics={mechanics}
+      canRecordPayment={canSetServicePaymentStatus(role)}
     />
   );
 }
