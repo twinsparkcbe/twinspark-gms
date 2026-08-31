@@ -80,8 +80,11 @@ describe("finer-grained Service permissions", () => {
   });
 
   it("lets only Admin set service payment status", () => {
+    // Anyone who works the Service module may mark a job paid (0039) — the
+    // counter staff taking the money are not always the owner. A Sales Person
+    // has no Service access at all and is still excluded.
     expect(canSetServicePaymentStatus("admin")).toBe(true);
-    expect(canSetServicePaymentStatus("mechanic")).toBe(false);
+    expect(canSetServicePaymentStatus("mechanic")).toBe(true);
     expect(canSetServicePaymentStatus("sales_person")).toBe(false);
   });
 });

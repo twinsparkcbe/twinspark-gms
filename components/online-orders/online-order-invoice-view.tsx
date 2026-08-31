@@ -8,6 +8,7 @@ import type { BusinessInfo } from "@/services/shared/invoice";
 import type { OnlineOrderRow } from "@/services/online-orders";
 
 import { PrintInvoiceButton } from "@/components/sales/print-invoice-button";
+import { BusinessContacts } from "@/components/shared/business-contacts";
 
 /**
  * Print-ready invoice for a dispatched online order
@@ -76,6 +77,7 @@ export function OnlineOrderInvoiceView({ order, business }: { order: OnlineOrder
                 tax fields on it), and printing the registration number on a
                 bill that charges no tax would be wrong. */}
             <p className="mt-3 text-xs font-semibold tracking-wide text-neutral-500 uppercase">Online Order</p>
+            <BusinessContacts contacts={business.contacts} />
           </div>
         </div>
 

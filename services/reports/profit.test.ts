@@ -8,9 +8,18 @@ const NOW = new Date("2026-07-29T10:00:00.000Z");
 type Result = { data: unknown; error: unknown };
 const EMPTY: Result = { data: [], error: null };
 
-/** Queued in the order getProfitTrend fires them: sales, online, COGS. */
-function mockTwoQueries(salesResult: Result, cogsResult: Result, onlineResult: Result = EMPTY) {
-  const results = [salesResult, onlineResult, cogsResult];
+/**
+ * Queued in the order getProfitTrend fires them: sales, online, service, COGS.
+ * Service defaults to empty so the existing cases stay about what they were
+ * written to test; the service cases pass it explicitly.
+ */
+function mockTwoQueries(
+  salesResult: Result,
+  cogsResult: Result,
+  onlineResult: Result = EMPTY,
+  serviceResult: Result = EMPTY
+) {
+  const results = [salesResult, onlineResult, serviceResult, cogsResult];
   let call = 0;
   return {
     from: () => createQueryBuilderMock(results[call++] as never),
@@ -113,5 +122,42 @@ describe("getProfitTrend — online orders", () => {
     const points = await getProfitTrend(supabase, "daily", NOW);
 
     expect(points[13].profit).toBe(5000);
+  });
+
+  it("buckets Service revenue by completed_at and adds it to profit", async () => {
+    const service = [{ grand_total: 4000, completed_at: NOW.toISOString() }];
+    const supabase = mockTwoQueries(EMPTY, EMPTY, EMPTY, { data: service, error: null });
+
+    const points = await getProfitTrend(supabase, "daily", NOW);
+
+    expect(points[13].serviceAmount).toBe(4000);
+    expect(points[13].profit).toBe(4000);
+  });
+
+  it("counts all three channels against one Cost of Goods Sold", async () => {
+    const sales = [{ grand_total: 1000, sale_date: NOW.toISOString() }];
+    const online = [{ total_amount: 500, dispatched_at: NOW.toISOString() }];
+    const service = [{ grand_total: 4000, completed_at: NOW.toISOString() }];
+    const cogsRows = [{ delta: -2, created_at: NOW.toISOString(), purchase_entries: { unit_price: 900 } }];
+    const supabase = mockTwoQueries(
+      { data: sales, error: null },
+      { data: cogsRows, error: null },
+      { data: online, error: null },
+      { data: service, error: null }
+    );
+
+    const points = await getProfitTrend(supabase, "daily", NOW);
+
+    // 1000 + 500 + 4000 - 1800
+    expect(points[13].profit).toBe(3700);
+  });
+
+  it("skips a completed job with no completed_at rather than bucketing it wrongly", async () => {
+    const service = [{ grand_total: 4000, completed_at: null }];
+    const supabase = mockTwoQueries(EMPTY, EMPTY, EMPTY, { data: service, error: null });
+
+    const points = await getProfitTrend(supabase, "daily", NOW);
+
+    expect(points.every((p) => p.serviceAmount === 0)).toBe(true);
   });
 });

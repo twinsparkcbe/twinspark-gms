@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Bike, FileText, StickyNote } from "lucide-react";
@@ -49,6 +49,20 @@ export function ServiceIntakeFormClient({ customers, vehicles }: { customers: Cu
   const [pendingJobs, setPendingJobs] = useState<ServiceJobRow[]>([]);
   const [lastService, setLastService] = useState<LastServiceSummary | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /**
+   * A ref, not the isSubmitting state beside it. Two reasons, both of which
+   * produced duplicate records on the Service list:
+   *
+   * 1. State does not change until React re-renders, so two clicks in the
+   *    same frame both read isSubmitting === false and both submit. A ref
+   *    flips synchronously.
+   * 2. isSubmitting used to be cleared BEFORE router.push(). Navigation is
+   *    async, so on a slow connection the form sat there with the button
+   *    live again for a second or more after a successful save — staff saw
+   *    nothing happen and pressed again. On success the lock is never
+   *    released: the form stays disabled until the next page replaces it.
+   */
+  const submitLock = useRef(false);
   const [errors, setErrors] = useState<{
     customerName?: string;
     customerMobile?: string;
@@ -98,17 +112,22 @@ export function ServiceIntakeFormClient({ customers, vehicles }: { customers: Cu
       usage: [],
     };
 
+    if (submitLock.current) return;
+    submitLock.current = true;
     setIsSubmitting(true);
     const result = await runWithLoader(() => createServiceJobIntakeAction(input));
-    setIsSubmitting(false);
 
-    if (result.success) {
-      toast.success(`${result.data.jobNumber} logged — ${result.data.vehicleNumber} accepted for service.`);
-      router.push(`/service/${result.data.id}`);
-    } else {
+    if (!result.success) {
+      // Only a failure hands the form back, so only a failure releases it.
+      submitLock.current = false;
+      setIsSubmitting(false);
       setErrors((prev) => ({ ...prev, form: result.error }));
       toast.error(result.error);
+      return;
     }
+
+    toast.success(`${result.data.jobNumber} logged — ${result.data.vehicleNumber} accepted for service.`);
+    router.push(`/service/${result.data.id}`);
   }
 
   return (

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { AutoPrintInvoice } from "@/components/sales/auto-print-invoice";
 import { PrintInvoiceButton } from "@/components/sales/print-invoice-button";
+import { BusinessContacts } from "@/components/shared/business-contacts";
 import type { JobCardView as JobCardViewModel } from "@/services/service/job-card";
 
 /**
@@ -47,7 +48,14 @@ export function JobCardView({ card }: { card: JobCardViewModel }) {
               {business.phone && <p className="text-sm text-neutral-500">{business.phone}</p>}
             </div>
           </div>
-          <p className="font-serif text-4xl font-bold tracking-tight text-neutral-900">JOB CARD</p>
+          {/* Wrapped in a column of its own so the contacts stack under the
+              title. Left as bare flex children they sat beside it — the other
+              three bills already had a text-right wrapper here because they
+              carry a GSTIN line; this one had nothing to stack until now. */}
+          <div className="text-right">
+            <p className="font-serif text-4xl font-bold tracking-tight text-neutral-900">JOB CARD</p>
+            <BusinessContacts contacts={business.contacts} />
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-8 border-t border-b border-neutral-300 py-2 text-sm">
