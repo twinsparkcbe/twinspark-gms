@@ -6,13 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ItemPickerCombobox } from "@/components/purchases/item-picker-combobox";
 import { formatINR } from "@/lib/format";
+import { maskAmountInput } from "@/lib/input-masks";
 import { cn } from "@/lib/utils";
 import type { InventoryItemRow } from "@/services/inventory";
+import { effectivePartUnitPrice } from "@/services/service/totals";
 
 export interface PartUsedDraft {
   id: string;
   inventoryItemId: string | null;
   quantityUsed: string;
+  /** Negotiated price for this job only (0040), mirroring the Sales line
+   * price. Empty string means "charge the catalogue price" — the meaning the
+   * field had by its absence before it existed, so an untouched row behaves
+   * exactly as before and nothing is sent to the server for it. */
+  unitPrice?: string;
   /** Combo Offers — which combo brought this part in, if any. */
   comboId?: string | null;
   /** Bills at ₹0 because the combo price already covers it. Stock still moves. */
@@ -98,7 +105,7 @@ export function ServicePartsUsed({
           const selectedItem = items.find((i) => i.id === part.inventoryItemId) ?? null;
           const qty = Math.trunc(Number(part.quantityUsed) || 0);
           const included = part.includedInCombo === true;
-          const amount = selectedItem && !included ? selectedItem.sellingPrice * qty : 0;
+          const amount = selectedItem && !included ? effectivePartUnitPrice(part, selectedItem.sellingPrice) * qty : 0;
           const exceedsStock = Boolean(selectedItem) && qty > (selectedItem?.availableQuantity ?? 0);
 
           return (
@@ -137,19 +144,75 @@ export function ServicePartsUsed({
                 ) : null}
               </div>
 
-              <div
-                className={cn(
-                  STACKED_CELL,
-                  "flex h-9 items-center justify-between text-sm text-neutral-600 md:justify-end"
-                )}
-              >
-                <span className="text-xs text-neutral-400 md:hidden">Price</span>
+              {/* Editable at the counter, same as a Sale line: the price moves
+                  for THIS JOB only. The catalogue is untouched — that still
+                  comes from the newest purchase batch. Blank restores the
+                  catalogue price. Below the item's cost is allowed here and
+                  only warned about (confirmed 2026-09-02); the Sales-side
+                  Administrator gate deliberately does not apply to a job. */}
+              <div className={cn(STACKED_CELL, "flex flex-col justify-center md:items-end")}>
                 {included ? (
-                  <span className="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">In combo</span>
+                  <div className="flex h-9 items-center justify-between gap-2 md:justify-end">
+                    <span className="text-xs text-neutral-400 md:hidden">Price</span>
+                    <span className="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">In combo</span>
+                  </div>
                 ) : selectedItem ? (
-                  formatINR(selectedItem.sellingPrice)
+                  (() => {
+                    const charged = effectivePartUnitPrice(part, selectedItem.sellingPrice);
+                    const isOverridden = charged !== selectedItem.sellingPrice;
+                    const belowCost = charged < selectedItem.purchasePrice;
+
+                    return (
+                      <>
+                        <div className="flex h-9 w-full items-center justify-between gap-2 md:justify-end">
+                          <span className="text-xs text-neutral-400 md:hidden">Price</span>
+                          <div className="relative">
+                            <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-neutral-400">
+                              &#8377;
+                            </span>
+                            <input
+                              inputMode="decimal"
+                              aria-label={`Price for ${selectedItem.productName}`}
+                              value={part.unitPrice ?? ""}
+                              placeholder={String(selectedItem.sellingPrice)}
+                              disabled={disabled}
+                              onChange={(e) => onUpdate(part.id, { unitPrice: maskAmountInput(e.target.value) })}
+                              className={cn(
+                                "h-9 w-[104px] rounded-[8px] border bg-white pr-2 pl-5 text-right text-sm tabular-nums outline-none focus-visible:ring-2 disabled:bg-neutral-50",
+                                belowCost
+                                  ? "border-danger text-danger focus-visible:border-danger focus-visible:ring-danger/20"
+                                  : isOverridden
+                                    ? "border-warning text-neutral-900 focus-visible:border-warning focus-visible:ring-warning/20"
+                                    : "border-neutral-200 text-neutral-600 focus-visible:border-brand-red focus-visible:ring-brand-red/20"
+                              )}
+                            />
+                          </div>
+                        </div>
+                        {belowCost ? (
+                          // The cost figure itself is deliberately not printed:
+                          // this screen is a Mechanic's too, and a service total
+                          // must never expose purchase price.
+                          <p className="mt-0.5 text-right text-[11px] font-medium text-danger">
+                            Below this item&rsquo;s cost price
+                          </p>
+                        ) : isOverridden ? (
+                          // The list price stays on screen so whoever approves
+                          // the bill can see what was given away.
+                          <p className="mt-0.5 text-right text-[11px] text-neutral-500">
+                            <span className="line-through">{formatINR(selectedItem.sellingPrice)}</span>{" "}
+                            <span className={charged < selectedItem.sellingPrice ? "font-semibold text-warning" : "font-semibold text-success"}>
+                              {charged < selectedItem.sellingPrice ? "−" : "+"}
+                              {formatINR(Math.abs(selectedItem.sellingPrice - charged))}
+                            </span>
+                          </p>
+                        ) : null}
+                      </>
+                    );
+                  })()
                 ) : (
-                  "—"
+                  <div className="flex h-9 items-center justify-between text-sm text-neutral-600 md:justify-end">
+                    <span className="text-xs text-neutral-400 md:hidden">Price</span>—
+                  </div>
                 )}
               </div>
               <div

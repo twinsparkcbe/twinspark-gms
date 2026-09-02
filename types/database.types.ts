@@ -1057,8 +1057,14 @@ export interface Database {
           item_name_snapshot: string;
           quantity_used: number;
           unit_price_snapshot: number;
+          /** What the catalogue said when the row was written (0040). */
+          list_price: number | null;
           /** Generated column — quantity_used * unit_price_snapshot, read-only. */
           line_total: number;
+          /** What these units cost the shop, snapshotted at deduction (0041). */
+          cost_total: number | null;
+          /** True on a back-filled row priced from purchase_price, not its batch (0041). */
+          cost_is_estimated: boolean;
           stock_deducted: boolean;
           /** Combo Offers (0022) — which combo brought this part in. */
           combo_id: string | null;
@@ -1073,6 +1079,9 @@ export interface Database {
           item_name_snapshot: string;
           quantity_used: number;
           unit_price_snapshot: number;
+          list_price?: number | null;
+          cost_total?: number | null;
+          cost_is_estimated?: boolean;
           stock_deducted?: boolean;
           combo_id?: string | null;
           included_in_combo?: boolean;
@@ -1085,6 +1094,9 @@ export interface Database {
           item_name_snapshot?: string;
           quantity_used?: number;
           unit_price_snapshot?: number;
+          list_price?: number | null;
+          cost_total?: number | null;
+          cost_is_estimated?: boolean;
           stock_deducted?: boolean;
           combo_id?: string | null;
           included_in_combo?: boolean;

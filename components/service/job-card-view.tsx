@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/shared/brand-mark";
+import { BillPageSize } from "@/components/shared/bill-page-size";
 import { AutoPrintInvoice } from "@/components/sales/auto-print-invoice";
 import { PrintInvoiceButton } from "@/components/sales/print-invoice-button";
 import { BusinessContacts } from "@/components/shared/business-contacts";
@@ -20,7 +21,8 @@ export function JobCardView({ card }: { card: JobCardViewModel }) {
   const { business, customer, vehicle, lines } = card;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 print:max-w-none print:space-y-0">
+    <div className="bill-page mx-auto max-w-3xl space-y-4 print:max-w-none print:space-y-0">
+      <BillPageSize />
       <AutoPrintInvoice />
       <div className="flex items-center justify-between print:hidden">
         <Button asChild variant="secondary" size="sm">
@@ -32,14 +34,14 @@ export function JobCardView({ card }: { card: JobCardViewModel }) {
         <PrintInvoiceButton />
       </div>
 
-      <div className="rounded-[14px] border border-neutral-200 bg-white p-8 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none">
-        <div className="-mx-8 -mt-8 mb-6 h-2 bg-brand-gold print:mx-0 print:mt-0" />
+      <div className="bill-sheet rounded-[14px] border border-neutral-200 bg-white p-8 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none">
+        <div className="bill-accent -mx-8 -mt-8 mb-6 h-2 bg-brand-gold print:mx-0 print:mt-0" />
 
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="bill-header flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <BrandMark variant="invoice" className="size-14" />
+            <BrandMark variant="invoice" className="bill-logo size-14" />
             <div>
-              <p className="text-lg font-extrabold text-neutral-900">{business.name}</p>
+              <p className="bill-business-name text-lg font-extrabold text-neutral-900">{business.name}</p>
               {business.addressLines.map((line) => (
                 <p key={line} className="text-sm text-neutral-500">
                   {line}
@@ -53,8 +55,8 @@ export function JobCardView({ card }: { card: JobCardViewModel }) {
               three bills already had a text-right wrapper here because they
               carry a GSTIN line; this one had nothing to stack until now. */}
           <div className="text-right">
-            <p className="font-serif text-4xl font-bold tracking-tight text-neutral-900">JOB CARD</p>
-            <BusinessContacts contacts={business.contacts} />
+            <p className="bill-title font-serif text-4xl font-bold tracking-tight text-neutral-900">JOB CARD</p>
+            <BusinessContacts contacts={business.contacts} className="bill-contacts" />
           </div>
         </div>
 
@@ -141,15 +143,15 @@ export function JobCardView({ card }: { card: JobCardViewModel }) {
         </table>
 
         <div className="mt-6 flex justify-end">
-          <div className="w-full max-w-xs space-y-1.5 border border-neutral-300 p-4 text-sm">
-            <div className="flex justify-between border-t border-neutral-300 pt-2 text-base font-bold text-neutral-900">
+          <div className="bill-totals w-full max-w-xs space-y-1.5 border border-neutral-300 p-4 text-sm">
+            <div className="bill-grand-total flex justify-between border-t border-neutral-300 pt-2 text-base font-bold text-neutral-900">
               <span>Total</span>
               <span>{card.totalLabel}</span>
             </div>
           </div>
         </div>
 
-        <p className="mt-8 text-center text-sm text-neutral-500">Thank you for choosing {business.name}.</p>
+        <p className="bill-footer mt-8 text-center text-sm text-neutral-500">Thank you for choosing {business.name}.</p>
       </div>
     </div>
   );

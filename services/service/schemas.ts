@@ -47,12 +47,18 @@ export const serviceJobLineInputSchema = z
 
 export type ServiceJobLineInput = z.infer<typeof serviceJobLineInputSchema>;
 
-/** A part/consumable used on the job — quantity only; price is snapshotted
- * server-side from the item's current selling price (doc §16). No stock is
- * deducted at this point (doc §6) — that only happens at completion. */
+/** A part/consumable used on the job. Price is snapshotted server-side from
+ * the item's current selling price (doc §16) unless `unitPrice` overrides it
+ * for this job (0040). No stock is deducted at this point (doc §6) — that
+ * only happens at completion. */
 export const serviceInventoryUsageInputSchema = z.object({
   inventoryItemId: z.string().uuid(),
   quantityUsed: z.coerce.number().int("Quantity must be a whole number").positive("Quantity must be greater than 0"),
+  /** Negotiated price for THIS JOB only (0040). Omitted means "charge the
+   * catalogue price" — the meaning the field had by its absence before it
+   * existed, so untouched rows behave exactly as before. Unlike Sales, there
+   * is no Administrator-only floor at the item's cost price. */
+  unitPrice: z.coerce.number().positive("Price must be greater than 0").optional(),
   /** Combo Offers (0022) — which combo brought this part in, if any. */
   comboId: z.string().uuid().optional(),
   /** Bills at ₹0 because the combo price already covers it. The server

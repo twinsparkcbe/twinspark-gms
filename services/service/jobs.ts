@@ -76,7 +76,13 @@ export interface ServiceInventoryUsageRow {
   inventoryItemId: string;
   itemName: string;
   quantityUsed: number;
+  /** What this job actually charged per unit — the catalogue price unless it
+   * was negotiated for this job (0040). */
   unitPrice: number;
+  /** What the catalogue said when the row was written (0040). Null on rows
+   * billed before that column existed, so callers must treat it as unknown
+   * rather than as "no discount". */
+  listPrice: number | null;
   lineTotal: number;
   /** Combo Offers (0022) — which combo brought this part in, if any. */
   comboId: string | null;
@@ -202,6 +208,7 @@ type JoinedRow = {
     item_name_snapshot: string;
     quantity_used: number;
     unit_price_snapshot: number;
+    list_price: number | null;
     line_total: number;
     combo_id: string | null;
     included_in_combo: boolean;
@@ -275,6 +282,7 @@ function mapServiceJob(row: JoinedRow): ServiceJobRow {
       itemName: u.item_name_snapshot,
       quantityUsed: u.quantity_used,
       unitPrice: Number(u.unit_price_snapshot),
+      listPrice: u.list_price === null || u.list_price === undefined ? null : Number(u.list_price),
       lineTotal: Number(u.line_total),
       comboId: u.combo_id,
       includedInCombo: u.included_in_combo ?? false,
@@ -293,7 +301,7 @@ function mapServiceJob(row: JoinedRow): ServiceJobRow {
 }
 
 const SERVICE_JOB_SELECT_COLUMNS =
-  "id, job_number, invoice_number, customer_id, vehicle_id, odometer_reading, status, complaint_notes, mechanic_notes, expected_delivery_at, completed_at, delivered_at, payment_status, payment_mode, cash_amount, upi_amount, delivery_status, gst_applicable, gst_amount, discount_applicable, discount_amount, subtotal, inventory_total, grand_total, assigned_mechanic_id, created_at, assigned_mechanic:profiles!service_jobs_assigned_mechanic_id_fkey(full_name), customers!inner(name, mobile_number, address), vehicles!inner(vehicle_number, vehicle_model), service_job_lines(id, position, line_type, general_service_package_id, specific_service_id, combo_id, combo_contents, combo_list_value, description, quantity, rate, amount), service_inventory_usage(id, inventory_item_id, item_name_snapshot, quantity_used, unit_price_snapshot, line_total, combo_id, included_in_combo), service_job_events(id, event_type, detail, created_at), service_job_images(id, image_type, storage_path, created_at)";
+  "id, job_number, invoice_number, customer_id, vehicle_id, odometer_reading, status, complaint_notes, mechanic_notes, expected_delivery_at, completed_at, delivered_at, payment_status, payment_mode, cash_amount, upi_amount, delivery_status, gst_applicable, gst_amount, discount_applicable, discount_amount, subtotal, inventory_total, grand_total, assigned_mechanic_id, created_at, assigned_mechanic:profiles!service_jobs_assigned_mechanic_id_fkey(full_name), customers!inner(name, mobile_number, address), vehicles!inner(vehicle_number, vehicle_model), service_job_lines(id, position, line_type, general_service_package_id, specific_service_id, combo_id, combo_contents, combo_list_value, description, quantity, rate, amount), service_inventory_usage(id, inventory_item_id, item_name_snapshot, quantity_used, unit_price_snapshot, list_price, line_total, combo_id, included_in_combo), service_job_events(id, event_type, detail, created_at), service_job_images(id, image_type, storage_path, created_at)";
 
 export async function getServiceJob(supabase: SupabaseClient<Database>, id: string): Promise<ServiceJobRow> {
   const { data, error } = await supabase.from("service_jobs").select(SERVICE_JOB_SELECT_COLUMNS).eq("id", id).maybeSingle();
@@ -441,6 +449,10 @@ function toRpcUsage(input: ServiceJobInput) {
   return input.usage.map((u) => ({
     inventory_item_id: u.inventoryItemId,
     quantity_used: u.quantityUsed,
+    // Only sent when the price was actually negotiated on this job (0040).
+    // Null means "charge the catalogue price", which is what the server did
+    // before the override existed — an untouched row behaves exactly as before.
+    unit_price: u.unitPrice ?? null,
     combo_id: u.comboId ?? null,
     included_in_combo: u.includedInCombo ?? false,
   }));

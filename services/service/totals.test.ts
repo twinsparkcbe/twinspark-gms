@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { computeServiceJobTotals, roundMoney, serviceLineAmount, type ServiceJobTotalsInput } from "./totals";
+import {
+  computeServiceJobTotals,
+  effectivePartUnitPrice,
+  partDiscount,
+  roundMoney,
+  serviceLineAmount,
+  type ServiceJobTotalsInput,
+} from "./totals";
 
 const PRICES: Record<string, number> = {
   "item-oil": 450,
@@ -147,5 +154,85 @@ describe("roundMoney", () => {
 
   it("clears floating-point noise", () => {
     expect(roundMoney(0.1 + 0.2)).toBe(0.3);
+  });
+});
+
+/**
+ * Part price override (0040) — the Service-side twin of Sales' 0034, and the
+ * reason these cases exist separately from the plain totals above: a blank
+ * price must keep behaving exactly as it did before the field existed.
+ */
+describe("effectivePartUnitPrice", () => {
+  const CATALOGUE = 450;
+
+  it("falls back to the catalogue price when nothing is typed", () => {
+    expect(effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1" }, CATALOGUE)).toBe(450);
+    expect(effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "" }, CATALOGUE)).toBe(450);
+    expect(effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "   " }, CATALOGUE)).toBe(450);
+  });
+
+  it("uses a typed price, above or below the catalogue", () => {
+    expect(effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "400" }, CATALOGUE)).toBe(400);
+    expect(effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "500.50" }, CATALOGUE)).toBe(500.5);
+  });
+
+  it("ignores garbage and non-positive input rather than billing zero", () => {
+    expect(effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "abc" }, CATALOGUE)).toBe(450);
+    expect(effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "0" }, CATALOGUE)).toBe(450);
+    expect(effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "-100" }, CATALOGUE)).toBe(450);
+  });
+
+  it("keeps a combo part at zero whatever price is sent for it", () => {
+    expect(
+      effectivePartUnitPrice({ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "400", includedInCombo: true }, CATALOGUE)
+    ).toBe(0);
+  });
+});
+
+describe("partDiscount", () => {
+  it("is the shortfall against the catalogue, times quantity", () => {
+    expect(partDiscount({ inventoryItemId: "item-oil", quantityUsed: "2", unitPrice: "400" }, 450)).toBe(100);
+  });
+
+  it("is zero for an untouched row and for an upcharge", () => {
+    expect(partDiscount({ inventoryItemId: "item-oil", quantityUsed: "2" }, 450)).toBe(0);
+    expect(partDiscount({ inventoryItemId: "item-oil", quantityUsed: "2", unitPrice: "500" }, 450)).toBe(0);
+  });
+
+  it("is zero for a combo part — the combo price already covers it", () => {
+    expect(partDiscount({ inventoryItemId: "item-oil", quantityUsed: "2", includedInCombo: true }, 450)).toBe(0);
+  });
+});
+
+describe("computeServiceJobTotals with an overridden part price", () => {
+  it("bills the negotiated price rather than the catalogue price", () => {
+    const result = totals({ parts: [{ inventoryItemId: "item-oil", quantityUsed: "2", unitPrice: "400" }] });
+    expect(result.partsTotal).toBe(800);
+    expect(result.grandTotal).toBe(800);
+  });
+
+  it("leaves an untouched row on the catalogue price", () => {
+    const result = totals({ parts: [{ inventoryItemId: "item-oil", quantityUsed: "2", unitPrice: "" }] });
+    expect(result.partsTotal).toBe(900);
+  });
+
+  it("carries the override through GST and discount", () => {
+    const result = totals({
+      parts: [{ inventoryItemId: "item-oil", quantityUsed: "1", unitPrice: "400" }],
+      gstApplicable: true,
+      gstPercent: "18",
+      discountApplicable: true,
+      discountAmount: "50",
+    });
+    expect(result.partsTotal).toBe(400);
+    expect(result.gstAmount).toBe(72);
+    expect(result.grandTotal).toBe(422);
+  });
+
+  it("still bills a combo part at zero", () => {
+    const result = totals({
+      parts: [{ inventoryItemId: "item-oil", quantityUsed: "2", unitPrice: "400", includedInCombo: true }],
+    });
+    expect(result.partsTotal).toBe(0);
   });
 });

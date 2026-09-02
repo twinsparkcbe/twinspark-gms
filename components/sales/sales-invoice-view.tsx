@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { BusinessContacts } from "@/components/shared/business-contacts";
+import { BillPageSize } from "@/components/shared/bill-page-size";
 import type { SalesInvoiceView as SalesInvoiceViewModel } from "@/services/shared/invoice";
 
 import { AutoPrintInvoice } from "./auto-print-invoice";
@@ -35,7 +36,8 @@ export function SalesInvoiceView({ invoice }: { invoice: SalesInvoiceViewModel }
   const { business, customer, lines, totals } = invoice;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 print:max-w-none print:space-y-0">
+    <div className="bill-page mx-auto max-w-3xl space-y-4 print:max-w-none print:space-y-0">
+      <BillPageSize />
       <AutoPrintInvoice />
       <div className="flex items-center justify-between print:hidden">
         <Button asChild variant="secondary" size="sm">
@@ -47,18 +49,18 @@ export function SalesInvoiceView({ invoice }: { invoice: SalesInvoiceViewModel }
         <PrintInvoiceButton />
       </div>
 
-      <div className="rounded-[14px] border border-neutral-200 bg-white p-8 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none">
+      <div className="bill-sheet rounded-[14px] border border-neutral-200 bg-white p-8 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none">
         {/* Thin brand accent instead of the reference's full watercolor
             wash — a decorative full-bleed background would burn ink on
             every printout; this keeps a touch of identity for free. */}
-        <div className="-mx-8 -mt-8 mb-6 h-2 bg-brand-gold print:mx-0 print:mt-0" />
+        <div className="bill-accent -mx-8 -mt-8 mb-6 h-2 bg-brand-gold print:mx-0 print:mt-0" />
 
         {/* Header: logo + business identity (left) + big INVOICE heading (right) */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="bill-header flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <BrandMark variant="invoice" className="size-14" />
+            <BrandMark variant="invoice" className="bill-logo size-14" />
             <div>
-              <p className="text-lg font-extrabold text-neutral-900">{business.name}</p>
+              <p className="bill-business-name text-lg font-extrabold text-neutral-900">{business.name}</p>
               {business.addressLines.map((line) => (
                 <p key={line} className="text-sm text-neutral-500">
                   {line}
@@ -68,7 +70,7 @@ export function SalesInvoiceView({ invoice }: { invoice: SalesInvoiceViewModel }
             </div>
           </div>
           <div className="text-right">
-            <p className="font-serif text-4xl font-bold tracking-tight text-neutral-900">INVOICE</p>
+            <p className="bill-title font-serif text-4xl font-bold tracking-tight text-neutral-900">INVOICE</p>
             {/* Printed only when this bill actually charges GST — the garage
                 also raises non-GST bills, which must not carry the
                 registration number. */}
@@ -77,7 +79,7 @@ export function SalesInvoiceView({ invoice }: { invoice: SalesInvoiceViewModel }
                 GSTIN: <span className="font-mono">{business.gstin}</span>
               </p>
             )}
-            <BusinessContacts contacts={business.contacts} />
+            <BusinessContacts contacts={business.contacts} className="bill-contacts" />
           </div>
         </div>
 
@@ -155,7 +157,7 @@ export function SalesInvoiceView({ invoice }: { invoice: SalesInvoiceViewModel }
 
         {/* Totals — boxed panel, Grand Total set off inside it */}
         <div className="mt-6 flex justify-end">
-          <div className="w-full max-w-xs space-y-1.5 border border-neutral-300 p-4 text-sm">
+          <div className="bill-totals w-full max-w-xs space-y-1.5 border border-neutral-300 p-4 text-sm">
             <div className="flex justify-between text-neutral-600">
               <span>Subtotal</span>
               <span className="font-medium text-neutral-900">{totals.subtotalLabel}</span>
@@ -178,7 +180,7 @@ export function SalesInvoiceView({ invoice }: { invoice: SalesInvoiceViewModel }
                 <span className="font-medium text-neutral-900">− {totals.discount.amountLabel}</span>
               </div>
             )}
-            <div className="flex justify-between border-t border-neutral-300 pt-2 text-base font-bold text-neutral-900">
+            <div className="bill-grand-total flex justify-between border-t border-neutral-300 pt-2 text-base font-bold text-neutral-900">
               <span>Grand Total</span>
               <span>{totals.grandTotalLabel}</span>
             </div>
@@ -213,7 +215,7 @@ export function SalesInvoiceView({ invoice }: { invoice: SalesInvoiceViewModel }
         </div>
 
         {/* Footer */}
-        <p className="mt-8 text-center text-sm text-neutral-500">Thank you for your business!</p>
+        <p className="bill-footer mt-8 text-center text-sm text-neutral-500">Thank you for your business!</p>
       </div>
     </div>
   );

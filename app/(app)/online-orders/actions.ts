@@ -163,6 +163,23 @@ async function runBulkAction(
   return { succeededCount, failed };
 }
 
+// Bulk Verify Payment — same SUBMITTED -> PAYMENT_VERIFIED guard as the
+// single action, applied per order. Counting the money is still a per-order
+// judgement made against the screenshot; this exists for the common case
+// where that judgement has already been made on a run of orders and the
+// only thing left is the clicking.
+export async function bulkVerifyOnlineOrderPaymentsAction(
+  orderIds: string[]
+): Promise<ActionResult<BulkOnlineOrderActionResult>> {
+  try {
+    const data = await runBulkAction(orderIds, verifyOnlineOrderPayment);
+    if (data.succeededCount > 0) revalidatePath("/online-orders");
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err, "Failed to verify the selected orders.") };
+  }
+}
+
 // Bulk Approve — same PAYMENT_VERIFIED -> APPROVED guard as the single
 // action, per order (doc/online-orders-scope.md §5, both roles allowed).
 export async function bulkApproveOnlineOrdersAction(

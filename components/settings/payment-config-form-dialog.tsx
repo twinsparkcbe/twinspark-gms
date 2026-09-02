@@ -67,14 +67,25 @@ export function PaymentConfigFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup-only effect, re-running on every render would revoke the current preview
   }, []);
 
-  function resetForm() {
+  /**
+   * Re-seeded on every open, matching UserFormDialog and RecordPaymentDialog.
+   *
+   * The useState initialisers above run once, on first mount, and this dialog
+   * stays mounted for the life of the settings screen — so the second config
+   * opened showed the first one's UPI ID. Re-seeding on CLOSE (what this did
+   * before) cannot fix it: at close time `editing` is still the config being
+   * closed, so it restored exactly the values that leaked into the next open.
+   */
+  useEffect(() => {
+    if (!open) return;
     setLabel(editing?.label ?? "");
     setUpiId(editing?.upiId ?? "");
     setPayeeName(editing?.payeeName ?? "");
     setQrImageFile(null);
     setQrImagePreviewUrl(editing?.qrImageUrl ?? null);
     setErrors({});
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing?.id]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -142,7 +153,6 @@ export function PaymentConfigFormDialog({
       onOpenChange={(next) => {
         if (isSubmitting) return;
         onOpenChange(next);
-        if (!next) resetForm();
       }}
     >
       <DialogContent key={editing?.id ?? "new"} className="sm:max-w-2xl">
@@ -155,7 +165,7 @@ export function PaymentConfigFormDialog({
             <div className="space-y-1.5">
               <Label>Label *</Label>
               <Input
-                defaultValue={label}
+                value={label}
                 placeholder="e.g. Twinspark GPay"
                 aria-invalid={Boolean(errors.label) || undefined}
                 onChange={(e) => {
@@ -171,7 +181,7 @@ export function PaymentConfigFormDialog({
             <div className="space-y-1.5">
               <Label>UPI ID *</Label>
               <Input
-                defaultValue={upiId}
+                value={upiId}
                 placeholder="name@bank"
                 aria-invalid={Boolean(errors.upiId) || undefined}
                 onChange={(e) => {
@@ -186,7 +196,7 @@ export function PaymentConfigFormDialog({
             <div className="space-y-1.5">
               <Label>Payee Name *</Label>
               <Input
-                defaultValue={payeeName}
+                value={payeeName}
                 placeholder="e.g. Twinspark Tyres And Bike Garage"
                 aria-invalid={Boolean(errors.payeeName) || undefined}
                 onChange={(e) => {

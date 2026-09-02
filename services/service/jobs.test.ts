@@ -82,8 +82,9 @@ const jobRow = {
       inventory_item_id: "33333333-3333-4333-8333-333333333301",
       item_name_snapshot: "Engine Oil 20W40",
       quantity_used: 1,
-      unit_price_snapshot: 350,
-      line_total: 350,
+      unit_price_snapshot: 320,
+      list_price: 350,
+      line_total: 320,
     },
   ],
   service_job_events: [
@@ -144,7 +145,12 @@ describe("getServiceJob", () => {
 
     expect(result.usage).toHaveLength(1);
     expect(result.usage[0].itemName).toBe("Engine Oil 20W40");
-    expect(result.usage[0].lineTotal).toBe(350);
+    expect(result.usage[0].lineTotal).toBe(320);
+    // Both halves of the price (0040): what was charged, and what the
+    // catalogue said at the time — a negotiated price has to stay
+    // distinguishable from a part that was simply cheap.
+    expect(result.usage[0].unitPrice).toBe(320);
+    expect(result.usage[0].listPrice).toBe(350);
   });
 
   it("throws ServiceJobNotFoundError when no row matches", async () => {
@@ -191,11 +197,43 @@ describe("createServiceJob", () => {
           },
         ],
         p_usage: [
-          { inventory_item_id: "33333333-3333-4333-8333-333333333301", quantity_used: 1, combo_id: null, included_in_combo: false },
+          {
+            inventory_item_id: "33333333-3333-4333-8333-333333333301",
+            quantity_used: 1,
+            // Nothing negotiated on this row — the server prices it from the catalogue (0040).
+            unit_price: null,
+            combo_id: null,
+            included_in_combo: false,
+          },
         ],
       })
     );
     expect(result.jobNumber).toBe("SJ-000001");
+  });
+
+  it("forwards a negotiated part price as unit_price (0040)", async () => {
+    const builder = createQueryBuilderMock({ data: jobRow, error: null });
+    const supabase = createSupabaseMock(builder, { data: "44444444-4444-4444-8444-444444444401", error: null });
+
+    await createServiceJob(supabase, {
+      ...baseInput,
+      usage: [{ inventoryItemId: "33333333-3333-4333-8333-333333333301", quantityUsed: 2, unitPrice: 300 }],
+    });
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "create_service_job",
+      expect.objectContaining({
+        p_usage: [
+          {
+            inventory_item_id: "33333333-3333-4333-8333-333333333301",
+            quantity_used: 2,
+            unit_price: 300,
+            combo_id: null,
+            included_in_combo: false,
+          },
+        ],
+      })
+    );
   });
 
   it("accepts a job with zero lines (Draft with nothing decided yet, doc §4/§6)", async () => {

@@ -11,4 +11,5 @@ export * from "./customer-followup";
 export * from "./collections";
 export * from "./revenue";
 export * from "./profit";
+export * from "./service-profit";
 export * from "./gst";

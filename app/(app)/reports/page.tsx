@@ -22,6 +22,7 @@ export default async function ReportsPage() {
         <ReportCard href="/reports/purchases" icon={ShoppingCart} title="Purchase Report" description="What you've bought, from whom, and what it cost, over a date range." />
         <ReportCard href="/reports/sales" icon={Receipt} title="Sales Report" description="What's actually selling, by item type, over a date range." />
         <ReportCard href="/reports/service" icon={Wrench} title="Service Report" description="Job volume, labour revenue, and parts consumed, over a date range." />
+        <ReportCard href="/reports/service-profit" icon={Wrench} title="Service Profit" description="What service work earns once the spares it used are paid for \u2014 labour, parts sold, parts cost, profit." />
         <ReportCard href="/reports/customer-followup" icon={PhoneCall} title="Customer Follow-Up" description="Customers overdue for a tyre check or service — your call list." />
         <ReportCard href="/reports/ageing-stock" icon={Boxes} title="Ageing Stock" description="Inventory that's been sitting too long — cash tied up on the shelf." />
         <ReportCard href="/reports/revenue" icon={TrendingUp} title="Revenue Report" description="Sales + Service revenue trend, daily, weekly, or monthly." />

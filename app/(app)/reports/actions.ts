@@ -12,12 +12,14 @@ import { getOnlineOrdersReportStats, type OnlineOrdersReportStats } from "@/serv
 import {
   getCollectionsReport,
   getGstReport,
+  getServiceProfitReport,
   listAgeingStock,
   listFollowUpCandidates,
   type AgeingStockRow,
   type CollectionsReport,
   type FollowUpCandidateRow,
   type GstReport,
+  type ServiceProfitReport,
 } from "@/services/reports";
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
@@ -103,6 +105,22 @@ export async function fetchGstReportAction(
     return { success: true, data };
   } catch (err) {
     return { success: false, error: toErrorMessage(err, "Failed to load the GST Report.") };
+  }
+}
+
+// --- Service Profit Report (doc/service-profit-report-scope.md) -----------
+
+export async function fetchServiceProfitReportAction(
+  preset: DateRangePreset,
+  custom?: { fromYMD: string; toYMD: string }
+): Promise<ActionResult<ServiceProfitReport>> {
+  try {
+    const supabase = await reportsClient();
+    const { from, to } = resolveRange(preset, custom);
+    const data = await getServiceProfitReport(supabase, { from, to });
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, error: toErrorMessage(err, "Failed to load the Service Profit Report.") };
   }
 }
 

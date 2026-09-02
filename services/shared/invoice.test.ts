@@ -371,7 +371,7 @@ function baseServiceJob(overrides: Partial<ServiceJobRow> = {}): ServiceJobRow {
       { id: "l1", position: 1, lineType: "PACKAGE", generalServicePackageId: "pkg-1", specificServiceId: null, comboId: null, comboContents: [], comboListValue: null, description: "Standard Service", quantity: 1, rate: 650, amount: 650 },
       { id: "l2", position: 2, lineType: "SPECIFIC", generalServicePackageId: null, specificServiceId: "spec-1", comboId: null, comboContents: [], comboListValue: null, description: "Chain Cleaning", quantity: 1, rate: 150, amount: 150 },
     ],
-    usage: [{ id: "u1", inventoryItemId: "item-1", itemName: "Engine Oil 20W40", quantityUsed: 1, unitPrice: 350, lineTotal: 350, comboId: null, includedInCombo: false }],
+    usage: [{ id: "u1", inventoryItemId: "item-1", itemName: "Engine Oil 20W40", quantityUsed: 1, unitPrice: 350, listPrice: 350, lineTotal: 350, comboId: null, includedInCombo: false }],
     events: [],
     images: [],
     assignedMechanicId: null,

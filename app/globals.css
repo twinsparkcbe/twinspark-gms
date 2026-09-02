@@ -165,3 +165,303 @@
     background-color: rgb(255 255 255 / 0.28);
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Printed bills — A5, one sheet.
+ *
+ * The shop prints every bill on A5 paper. The four bill views (Sales
+ * Invoice, Service Invoice, Online Order Invoice, Job Card) were laid out at
+ * screen sizes — 14px body text, 36px headings, 8px table padding — which is
+ * comfortable on A4 and spills onto a second A5 sheet after only a few line
+ * items. A second sheet for two extra rows is wasted paper on every bill.
+ *
+ * So print gets its own scale here rather than a second set of components:
+ * the markup, the wording and the screen view are untouched, and only the
+ * measurements change once the browser switches to print. Everything is in
+ * pt/mm, the units the printed page is actually measured in — a px value
+ * would be re-interpreted at whatever DPI the driver picks.
+ *
+ * The budget this is tuned against, on A5 portrait (148 x 210mm) with a 7mm
+ * margin, i.e. 134 x 196mm of usable paper:
+ *
+ *   header + contacts       ~26mm
+ *   invoice no./date        ~6mm
+ *   bill to / vehicle       ~12mm
+ *   table header + 10 rows  ~50mm
+ *   totals panel            ~35mm
+ *   footer                  ~6mm
+ *                           ------
+ *                           ~135mm, leaving ~60mm of slack for wrapped
+ *                           descriptions, a combo's contents list, GST,
+ *                           discount and tender lines.
+ *
+ * Past roughly a dozen items the bill flows onto a second sheet, deliberately
+ * (confirmed with the developer 2026-09-02) — shrinking type further to force
+ * one page makes a bill the customer cannot read. `thead` repeats on the
+ * second sheet and a row never splits across the break.
+ *
+ * WHERE THE PAPER SIZE ITSELF IS SET: not here. `@page` has no selector, so a
+ * rule in this global stylesheet would re-paper every printable screen,
+ * courier labels included. It lives in `components/shared/bill-page-size.tsx`,
+ * rendered only by the four bills — that file records why a *named* page
+ * (`@page bill`) was the wrong answer: it added a blank second sheet.
+ *
+ * These rules sit outside Tailwind's cascade layers on purpose: unlayered CSS
+ * beats layered utilities regardless of specificity, so a `text-sm` or `p-8`
+ * in the markup can't quietly win back the size it had on screen.
+ * --------------------------------------------------------------------------- */
+@media print {
+  /* Stray boxes that belong to the app, not to the bill — Next's route
+     announcer and the toast container both sit after the content — must not
+     reach the paper: a visible toast would print across the bill. Hidden
+     here rather than in each template, since none of the four renders them. */
+  next-route-announcer,
+  [data-sonner-toaster],
+  [data-sonner-toaster] *,
+  section:has(> [data-sonner-toaster]) {
+    display: none !important;
+  }
+
+  /* Base scale. Every rule below is a delta from this. */
+  .bill-sheet {
+    font-size: 7.6pt;
+    line-height: 1.3;
+  }
+
+  /* Header ---------------------------------------------------------------- */
+
+  /* The two header columns — identity on the left, INVOICE title and phone
+     numbers on the right — are a `flex-wrap` row sized for a screen. On A5
+     the two no longer fit side by side, so the row wrapped: the title and the
+     contacts dropped underneath the logo and, being a shrink-to-fit block on
+     a fresh line, sat against the LEFT edge with their `text-right` aligning
+     nothing but themselves.
+     On paper the width is known and fixed, so the row is simply told not to
+     wrap: the left column may shrink (min-width: 0 lets a long address wrap
+     inside its own column instead of forcing the row wider) and the right
+     column keeps its natural width, pinned to the right edge. */
+  .bill-sheet .bill-header {
+    flex-wrap: nowrap;
+    gap: 6pt;
+  }
+
+  .bill-sheet .bill-header > :first-child {
+    min-width: 0;
+  }
+
+  .bill-sheet .bill-header > :last-child {
+    flex: 0 0 auto;
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .bill-sheet .bill-accent {
+    height: 2.5pt;
+    margin-bottom: 5pt;
+  }
+
+  /* next/image renders width/height attributes inline, so both axes are set
+     here to override them. */
+  .bill-sheet .bill-logo {
+    width: 10mm;
+    height: 10mm;
+  }
+
+  .bill-sheet .bill-business-name {
+    font-size: 10pt;
+    line-height: 1.15;
+  }
+
+  .bill-sheet .bill-title {
+    font-size: 15pt;
+    line-height: 1;
+  }
+
+  /* The contacts grid and the GSTIN line: small, but still legible enough to
+     dial off a printed bill. */
+  .bill-sheet .bill-contacts {
+    margin-top: 3pt;
+  }
+
+  .bill-sheet .bill-contacts p {
+    font-size: 5.6pt;
+  }
+
+  .bill-sheet .bill-contacts > div {
+    font-size: 6.4pt;
+    gap: 0 4pt;
+  }
+
+  /* Section headings above each table ("Service Charges", "Parts Used"). */
+  .bill-sheet .bill-section-label {
+    font-size: 6.4pt;
+    margin-top: 5pt;
+  }
+
+  /* Line-item tables ------------------------------------------------------ */
+
+  .bill-sheet table {
+    font-size: 7pt;
+    margin-top: 2pt;
+  }
+
+  .bill-sheet th,
+  .bill-sheet td {
+    padding: 1.6pt 3pt;
+  }
+
+  .bill-sheet thead tr {
+    font-size: 6.2pt;
+  }
+
+  /* A combo's contents, printed unpriced under its line. */
+  .bill-sheet td ul {
+    margin-top: 1pt;
+    font-size: 6.2pt;
+  }
+
+  .bill-sheet td p + p {
+    font-size: 6.2pt;
+  }
+
+  /* Pagination: the header repeats on sheet two, and a row is never cut in
+     half by the break. */
+  .bill-sheet thead {
+    display: table-header-group;
+  }
+
+  .bill-sheet tr {
+    break-inside: avoid;
+  }
+
+  /* Totals ---------------------------------------------------------------- */
+
+  .bill-sheet .bill-totals {
+    width: 62mm;
+    max-width: 62mm;
+    padding: 4pt 5pt;
+    font-size: 7.2pt;
+    break-inside: avoid;
+  }
+
+  .bill-sheet .bill-totals > div {
+    margin-top: 1.5pt;
+  }
+
+  .bill-sheet .bill-totals .bill-grand-total {
+    font-size: 9pt;
+    padding-top: 2.5pt;
+  }
+
+  .bill-sheet .bill-footer {
+    margin-top: 6pt;
+    font-size: 6.8pt;
+  }
+
+  /* Type scale ------------------------------------------------------------ */
+
+  /* The screen scale mapped to print, once, rather than a print size beside
+     every text class in four templates. */
+  .bill-sheet .text-lg {
+    font-size: 10pt;
+  }
+  .bill-sheet .text-base {
+    font-size: 8.6pt;
+  }
+  .bill-sheet .text-sm {
+    font-size: 7.2pt;
+  }
+  .bill-sheet .text-xs {
+    font-size: 6.4pt;
+  }
+  .bill-sheet .text-\[11px\] {
+    font-size: 6pt;
+  }
+  .bill-sheet .text-\[10px\] {
+    font-size: 5.8pt;
+  }
+
+  /* A5 is ~559px wide in CSS pixels, which is BELOW Tailwind's `sm` (640px)
+     breakpoint — so on paper the Bill-To/Vehicle pair, which sits
+     side-by-side on screen and on A4, was stacking and eating four lines of
+     the page. Print is a fixed, known width, so the two-up layout is simply
+     asserted here. */
+  .bill-sheet .sm\:grid-cols-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Column widths ---------------------------------------------------------- */
+
+  /* The tables carry pixel widths (w-32, w-20) sized for a 768px screen. On
+     134mm of paper those squeeze the description column until every item name
+     wraps onto a second line, which is what turned a ten-line bill into two
+     sheets. Fixed in mm here, leaving ~74mm for the description — enough for
+     a full item name on one line.
+     Column 2 is the description on every bill; 3/4/5 are the numbers (Price/
+     Qty/Total on a Sales bill, Qty/Rate/Amount on a Service one), so the
+     widths suit either order. */
+  .bill-sheet th:first-child,
+  .bill-sheet td:first-child {
+    width: 6mm;
+  }
+  .bill-sheet th:nth-child(3),
+  .bill-sheet td:nth-child(3) {
+    width: 16mm;
+  }
+  .bill-sheet th:nth-child(4),
+  .bill-sheet td:nth-child(4) {
+    width: 18mm;
+  }
+  .bill-sheet th:nth-child(5),
+  .bill-sheet td:nth-child(5) {
+    width: 20mm;
+  }
+
+  /* Vertical rhythm ------------------------------------------------------- */
+
+  /* Overriding the utilities by name rather than adding a class at every
+     spacer: these are the only margins the four bills use between blocks, and
+     the alternative is a dozen extra class names in the markup whose sole
+     purpose is to be shrunk here. Confined to `.bill-sheet`, so nothing else
+     in the app is affected. */
+  .bill-sheet .mb-6 {
+    margin-bottom: 4pt;
+  }
+  .bill-sheet .mt-1 {
+    margin-top: 1.5pt;
+  }
+  .bill-sheet .mt-3 {
+    margin-top: 3pt;
+  }
+  .bill-sheet .mt-4 {
+    margin-top: 4pt;
+  }
+  .bill-sheet .mt-5 {
+    margin-top: 5pt;
+  }
+  .bill-sheet .mt-6 {
+    margin-top: 5pt;
+  }
+  .bill-sheet .mt-8 {
+    margin-top: 6pt;
+  }
+  .bill-sheet .gap-4 {
+    gap: 5pt;
+  }
+  .bill-sheet .gap-8 {
+    gap: 8pt;
+  }
+  .bill-sheet .gap-x-8 {
+    column-gap: 8pt;
+  }
+  .bill-sheet .py-2 {
+    padding-top: 2pt;
+    padding-bottom: 2pt;
+  }
+  .bill-sheet .space-y-0\.5 > * + * {
+    margin-top: 1pt;
+  }
+  .bill-sheet .space-y-1\.5 > * + * {
+    margin-top: 1.5pt;
+  }
+}

@@ -274,6 +274,23 @@ I'll move to test cases next, in chat, per the module workflow.
 
 ---
 
+## Addendum — Service Profit Report added (`/reports/service-profit`)
+
+Confirmed 2026-09-02. Full scope: `doc/service-profit-report-scope.md`.
+
+§4's Service Report shows labour and parts **billed**; §8's Profit Report
+nets the whole shop into one figure. Neither can say whether service work
+makes money. The Service Profit Report answers exactly that, on the split
+that matters: labour and non-stock services are profit in full, spares earn
+only what they were billed above what those units cost. GST is excluded,
+the job discount subtracted, and a free service counts as zero revenue with
+its parts cost still charged.
+
+It needed a data change to be answerable at all — parts cost is now
+snapshotted per job at deduction time
+(`service_inventory_usage.cost_total`, migration 0041) instead of being
+reconstructed from `stock_movements`, which carries no job reference.
+
 ## Addendum — GST Report added (`/reports/gst`)
 
 **Purpose:** every Sale and completed Service Job billed with GST applied,
