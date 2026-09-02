@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,6 +13,8 @@ import type { UserRole } from "@/lib/auth/permissions";
 import type { ProfileRow } from "@/services/users";
 
 import { createUserAction, updateUserAction } from "@/app/(app)/settings/users/actions";
+
+import { initialUserFormState } from "./user-form-state";
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "sales_person", label: "Sales Person" },
@@ -45,22 +47,38 @@ export function UserFormDialog({
   onOpenChange: (open: boolean) => void;
   onSaved: (user: ProfileRow) => void;
 }) {
-  const [fullName, setFullName] = useState(editing?.fullName ?? "");
-  const [email, setEmail] = useState(editing?.email ?? "");
-  const [password, setPassword] = useState("");
+  const seed = initialUserFormState(editing);
+  const [fullName, setFullName] = useState(seed.fullName);
+  const [email, setEmail] = useState(seed.email);
+  const [password, setPassword] = useState(seed.password);
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState<UserRole>(editing?.role ?? "sales_person");
+  const [role, setRole] = useState<UserRole>(seed.role);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function resetForm() {
-    setFullName(editing?.fullName ?? "");
-    setEmail(editing?.email ?? "");
-    setPassword("");
+  /**
+   * Re-seeded on every open, the same way RecordPaymentDialog re-seeds on
+   * [open, bill].
+   *
+   * A useState initialiser runs once, on first mount, and this dialog is
+   * mounted by the users page for the whole life of the screen — so without
+   * this the second user you opened still showed the first one's role, and
+   * Add User still showed the last edited email. Re-seeding on close (what
+   * this used to do) could not work: at close time `editing` is still the
+   * user being closed, so it restored exactly the values that then leaked
+   * into the next open.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const next = initialUserFormState(editing);
+    setFullName(next.fullName);
+    setEmail(next.email);
+    setPassword(next.password);
+    setRole(next.role);
     setShowPassword(false);
-    setRole(editing?.role ?? "sales_person");
     setErrors({});
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing?.id]);
 
   async function handleSubmit() {
     const nextErrors: FormErrors = {};
@@ -95,10 +113,9 @@ export function UserFormDialog({
       onOpenChange={(next) => {
         if (isSubmitting) return;
         onOpenChange(next);
-        if (!next) resetForm();
       }}
     >
-      <DialogContent key={editing?.id ?? "new"} className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit User" : "Add User"}</DialogTitle>
         </DialogHeader>
@@ -106,7 +123,7 @@ export function UserFormDialog({
           <div className="space-y-1.5">
             <Label>Full Name *</Label>
             <Input
-              defaultValue={editing?.fullName ?? ""}
+              value={fullName}
               placeholder="e.g. Karthik Raja"
               aria-invalid={Boolean(errors.fullName) || undefined}
               onChange={(e) => {
@@ -130,7 +147,7 @@ export function UserFormDialog({
                 <Label>Email *</Label>
                 <Input
                   type="email"
-                  defaultValue={email}
+                  value={email}
                   placeholder="staff@twinspark.in"
                   aria-invalid={Boolean(errors.email) || undefined}
                   onChange={(e) => {
@@ -146,6 +163,7 @@ export function UserFormDialog({
                 <div className="relative">
                   <Input
                     type={showPassword ? "text" : "password"}
+                    value={password}
                     placeholder="At least 8 characters"
                     aria-invalid={Boolean(errors.password) || undefined}
                     className="pr-10"

@@ -215,6 +215,12 @@ export function ServiceJobFormClient({
       id: newId(),
       inventoryItemId: u.inventoryItemId,
       quantityUsed: String(u.quantityUsed),
+      // Seeded with what the job actually charged, not today's catalogue
+      // price — reopening a job must show the bill as it stands, or a
+      // negotiated part silently reverts to list on the next save. A part
+      // carried in by a combo bills at ₹0 and has no editable price, so it
+      // seeds blank.
+      unitPrice: u.includedInCombo ? "" : String(u.unitPrice),
       comboId: u.comboId,
       includedInCombo: u.includedInCombo,
     })),
@@ -406,6 +412,7 @@ export function ServiceJobFormClient({
         id: newId(),
         inventoryItemId: part.inventoryItemId,
         quantityUsed: String(part.quantity),
+        unitPrice: "",
         comboId: part.comboId,
         includedInCombo: part.includedInCombo,
       })),
@@ -487,6 +494,12 @@ export function ServiceJobFormClient({
       if (!part.inventoryItemId) fieldErrors.inventoryItemId = "Select an item.";
       const qty = Math.trunc(Number(part.quantityUsed) || 0);
       if (qty <= 0) fieldErrors.quantityUsed = "Enter a quantity greater than 0.";
+      // Blank is valid and means "charge the catalogue price"; anything typed
+      // has to be a real, positive amount.
+      const typedPrice = (part.unitPrice ?? "").trim();
+      if (typedPrice !== "" && !(Number(typedPrice) > 0)) {
+        fieldErrors.unitPrice = "Enter a price greater than 0, or leave it blank for the catalogue price.";
+      }
       if (Object.keys(fieldErrors).length > 0) nextPartErrors[part.id] = fieldErrors;
     }
 
@@ -537,6 +550,13 @@ export function ServiceJobFormClient({
       usage: parts.map((p) => ({
         inventoryItemId: p.inventoryItemId ?? "",
         quantityUsed: Math.trunc(Number(p.quantityUsed) || 0),
+        // Only sent when actually negotiated. Undefined means "use the
+        // catalogue price", which is what the server did before this existed —
+        // so an untouched row behaves exactly as before.
+        unitPrice:
+          !p.includedInCombo && (p.unitPrice ?? "").trim() !== "" && Number(p.unitPrice) > 0
+            ? Number(p.unitPrice)
+            : undefined,
         comboId: p.comboId ?? undefined,
         includedInCombo: p.includedInCombo ?? undefined,
       })),

@@ -9,6 +9,7 @@ import type { OnlineOrderRow } from "@/services/online-orders";
 
 import { PrintInvoiceButton } from "@/components/sales/print-invoice-button";
 import { BusinessContacts } from "@/components/shared/business-contacts";
+import { BillPageSize } from "@/components/shared/bill-page-size";
 
 /**
  * Print-ready invoice for a dispatched online order
@@ -44,7 +45,8 @@ export function OnlineOrderInvoiceView({ order, business }: { order: OnlineOrder
   const adjustment = Math.round((order.totalAmount - linesTotal) * 100) / 100;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 print:max-w-none print:space-y-0">
+    <div className="bill-page mx-auto max-w-3xl space-y-4 print:max-w-none print:space-y-0">
+      <BillPageSize />
       <div className="flex items-center justify-between print:hidden">
         <Button asChild variant="secondary" size="sm">
           <Link href="/online-orders">
@@ -55,14 +57,14 @@ export function OnlineOrderInvoiceView({ order, business }: { order: OnlineOrder
         <PrintInvoiceButton />
       </div>
 
-      <div className="rounded-[14px] border border-neutral-200 bg-white p-8 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none">
-        <div className="-mx-8 -mt-8 mb-6 h-2 bg-brand-gold print:mx-0 print:mt-0" />
+      <div className="bill-sheet rounded-[14px] border border-neutral-200 bg-white p-8 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none">
+        <div className="bill-accent -mx-8 -mt-8 mb-6 h-2 bg-brand-gold print:mx-0 print:mt-0" />
 
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="bill-header flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <BrandMark variant="invoice" className="size-14" />
+            <BrandMark variant="invoice" className="bill-logo size-14" />
             <div>
-              <p className="text-lg font-extrabold text-neutral-900">{business.name}</p>
+              <p className="bill-business-name text-lg font-extrabold text-neutral-900">{business.name}</p>
               {business.addressLines.map((line) => (
                 <p key={line} className="text-sm text-neutral-500">
                   {line}
@@ -72,12 +74,12 @@ export function OnlineOrderInvoiceView({ order, business }: { order: OnlineOrder
             </div>
           </div>
           <div className="text-right">
-            <p className="font-serif text-4xl font-bold tracking-tight text-neutral-900">INVOICE</p>
+            <p className="bill-title font-serif text-4xl font-bold tracking-tight text-neutral-900">INVOICE</p>
             {/* No GSTIN: an online order carries no GST at all (there are no
                 tax fields on it), and printing the registration number on a
                 bill that charges no tax would be wrong. */}
             <p className="mt-3 text-xs font-semibold tracking-wide text-neutral-500 uppercase">Online Order</p>
-            <BusinessContacts contacts={business.contacts} />
+            <BusinessContacts contacts={business.contacts} className="bill-contacts" />
           </div>
         </div>
 
@@ -148,7 +150,7 @@ export function OnlineOrderInvoiceView({ order, business }: { order: OnlineOrder
         </table>
 
         <div className="mt-6 flex justify-end">
-          <div className="w-full max-w-xs space-y-1.5 border border-neutral-300 p-4 text-sm">
+          <div className="bill-totals w-full max-w-xs space-y-1.5 border border-neutral-300 p-4 text-sm">
             <div className="flex justify-between text-neutral-600">
               <span>Subtotal</span>
               <span className="font-medium text-neutral-900">{formatINR(linesTotal)}</span>
@@ -162,7 +164,7 @@ export function OnlineOrderInvoiceView({ order, business }: { order: OnlineOrder
                 </span>
               </div>
             )}
-            <div className="flex justify-between border-t border-neutral-300 pt-2 text-base font-bold text-neutral-900">
+            <div className="bill-grand-total flex justify-between border-t border-neutral-300 pt-2 text-base font-bold text-neutral-900">
               <span>Grand Total</span>
               <span>{formatINR(order.totalAmount)}</span>
             </div>
@@ -173,7 +175,7 @@ export function OnlineOrderInvoiceView({ order, business }: { order: OnlineOrder
           </div>
         </div>
 
-        <p className="mt-8 text-center text-xs text-neutral-400">
+        <p className="bill-footer mt-8 text-center text-xs text-neutral-400">
           Thank you for your order. Paid online before dispatch — no balance due.
         </p>
       </div>

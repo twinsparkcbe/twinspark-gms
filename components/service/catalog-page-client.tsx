@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Gift, Package2, Plus, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
@@ -464,6 +464,29 @@ function PackageDialog({
   const [errors, setErrors] = useState<{ name?: string; serviceCharge?: string; form?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  /**
+   * Re-seeded on every open, matching UserFormDialog and RecordPaymentDialog.
+   * The useState initialisers above run once, on first mount, and this dialog
+   * stays mounted for the life of the screen — so the second entry opened
+   * showed the first one's charge and default items. Re-seeding on CLOSE
+   * (what this did before) cannot work: at close time `editing` is still the
+   * entry being closed, so it restored the very values that then leaked into
+   * the next open. The key on DialogContent below looks like it covers this,
+   * but the state lives here, above it, so a remount of the content never
+   * touched it.
+   */
+  useEffect(() => {
+    if (!open) return;
+    setName(editing?.name ?? "");
+    setIncludedItems(editing?.includedItems.join(", ") ?? "");
+    setServiceCharge(editing ? String(editing.serviceCharge) : "");
+    setDefaultItemRows(
+      (editing?.defaultItems ?? []).map((i) => ({ id: newId(), inventoryItemId: i.inventoryItemId, defaultQuantity: String(i.defaultQuantity) }))
+    );
+    setErrors({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing?.id]);
+
   function addDefaultItem() {
     setDefaultItemRows((prev) => [...prev, { id: newId(), inventoryItemId: null, defaultQuantity: "1" }]);
   }
@@ -514,13 +537,6 @@ function PackageDialog({
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
-        if (!next) {
-          setName(editing?.name ?? "");
-          setIncludedItems(editing?.includedItems.join(", ") ?? "");
-          setServiceCharge(editing ? String(editing.serviceCharge) : "");
-          setDefaultItemRows((editing?.defaultItems ?? []).map((i) => ({ id: newId(), inventoryItemId: i.inventoryItemId, defaultQuantity: String(i.defaultQuantity) })));
-          setErrors({});
-        }
       }}
     >
       <DialogContent key={editing?.id ?? "new"} className="sm:max-w-xl">
@@ -604,6 +620,28 @@ function SpecificServiceDialog({
   const [errors, setErrors] = useState<{ name?: string; defaultCharge?: string; form?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  /**
+   * Re-seeded on every open, matching UserFormDialog and RecordPaymentDialog.
+   * The useState initialisers above run once, on first mount, and this dialog
+   * stays mounted for the life of the screen — so the second entry opened
+   * showed the first one's charge and default items. Re-seeding on CLOSE
+   * (what this did before) cannot work: at close time `editing` is still the
+   * entry being closed, so it restored the very values that then leaked into
+   * the next open. The key on DialogContent below looks like it covers this,
+   * but the state lives here, above it, so a remount of the content never
+   * touched it.
+   */
+  useEffect(() => {
+    if (!open) return;
+    setName(editing?.name ?? "");
+    setDefaultCharge(editing?.defaultCharge !== null && editing?.defaultCharge !== undefined ? String(editing.defaultCharge) : "");
+    setDefaultItemRows(
+      (editing?.defaultItems ?? []).map((i) => ({ id: newId(), inventoryItemId: i.inventoryItemId, defaultQuantity: String(i.defaultQuantity) }))
+    );
+    setErrors({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing?.id]);
+
   function addDefaultItem() {
     setDefaultItemRows((prev) => [...prev, { id: newId(), inventoryItemId: null, defaultQuantity: "1" }]);
   }
@@ -650,12 +688,6 @@ function SpecificServiceDialog({
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
-        if (!next) {
-          setName(editing?.name ?? "");
-          setDefaultCharge(editing?.defaultCharge !== null && editing?.defaultCharge !== undefined ? String(editing.defaultCharge) : "");
-          setDefaultItemRows((editing?.defaultItems ?? []).map((i) => ({ id: newId(), inventoryItemId: i.inventoryItemId, defaultQuantity: String(i.defaultQuantity) })));
-          setErrors({});
-        }
       }}
     >
       <DialogContent key={editing?.id ?? "new"} className="sm:max-w-xl">

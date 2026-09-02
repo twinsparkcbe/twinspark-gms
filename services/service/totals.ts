@@ -27,6 +27,9 @@ export interface TotalsLineInput {
 export interface TotalsPartInput {
   inventoryItemId: string | null;
   quantityUsed: string | number;
+  /** Negotiated price for this job (0040). Blank/absent means the catalogue
+   * price, so an untouched row totals exactly as it did before. */
+  unitPrice?: string | number;
   /** Combo Offers — a part covered by a combo price bills at ₹0 here, while
    * still counting as stock that will move at completion. */
   includedInCombo?: boolean;
@@ -74,6 +77,32 @@ export function serviceLineAmount(line: TotalsLineInput): number {
   return roundMoney(toWholeNumber(line.quantity) * toNumber(line.rate));
 }
 
+/**
+ * What a part line actually charges per unit: the negotiated price when one
+ * has been typed and parses to something positive, otherwise the catalogue
+ * price. The single source of truth for the row, the running total and the
+ * submitted payload — three places computing "the price" independently is how
+ * a bill ends up not matching its own line items.
+ *
+ * Mirrors `effectiveUnitPrice` in components/sales/sale-line-items.tsx.
+ */
+export function effectivePartUnitPrice(part: TotalsPartInput, catalogPrice: number): number {
+  if (part.includedInCombo) return 0; // the combo price already covers it
+  const raw = part.unitPrice;
+  if (raw === undefined || raw === null || String(raw).trim() === "") return catalogPrice;
+  const typed = Number(String(raw).trim());
+  if (Number.isFinite(typed) && typed > 0) return typed;
+  return catalogPrice;
+}
+
+/** Money given away on a part line versus the catalogue — never negative, so
+ * an upcharge reads as zero discount rather than a negative one. */
+export function partDiscount(part: TotalsPartInput, catalogPrice: number): number {
+  if (part.includedInCombo) return 0;
+  const qty = toWholeNumber(part.quantityUsed);
+  return Math.max(0, catalogPrice - effectivePartUnitPrice(part, catalogPrice)) * qty;
+}
+
 export function computeServiceJobTotals(input: ServiceJobTotalsInput): ServiceJobTotals {
   const subtotal = roundMoney(input.lines.reduce((sum, line) => sum + serviceLineAmount(line), 0));
 
@@ -83,7 +112,7 @@ export function computeServiceJobTotals(input: ServiceJobTotalsInput): ServiceJo
       if (!part.inventoryItemId) return sum; // row added but no item picked yet
       const price = input.prices.sellingPriceOf(part.inventoryItemId);
       if (price === undefined) return sum; // item no longer in the loaded list
-      return sum + price * toWholeNumber(part.quantityUsed);
+      return sum + effectivePartUnitPrice(part, price) * toWholeNumber(part.quantityUsed);
     }, 0)
   );
 

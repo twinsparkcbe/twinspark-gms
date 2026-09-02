@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PackageSearch, Tag, Truck } from "lucide-react";
+import { BadgeCheck, PackageSearch, Tag, Truck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   approveOnlineOrderAction,
   bulkApproveOnlineOrdersAction,
   bulkDispatchOnlineOrdersAction,
+  bulkVerifyOnlineOrderPaymentsAction,
   dispatchOnlineOrderAction,
   fetchOnlineOrderStatsAction,
   fetchOnlineOrdersAction,
@@ -107,6 +108,7 @@ export function OnlineOrdersPageClient({
     open: false,
     order: null,
   });
+  const [bulkVerifyDialogOpen, setBulkVerifyDialogOpen] = useState(false);
   const [bulkApproveDialogOpen, setBulkApproveDialogOpen] = useState(false);
   const [bulkDispatchDialogOpen, setBulkDispatchDialogOpen] = useState(false);
 
@@ -263,6 +265,17 @@ export function OnlineOrdersPageClient({
     return result;
   }
 
+  async function handleBulkVerify(orderIds: string[]) {
+    const result = await bulkVerifyOnlineOrderPaymentsAction(orderIds);
+    if (result.success) {
+      toastBulkResult(result.data, "verified");
+      await Promise.all([refetch(), refreshStats()]);
+      setSelectedIds(new Set());
+      return { success: true };
+    }
+    return result;
+  }
+
   async function handleBulkApprove(orderIds: string[]) {
     const result = await bulkApproveOnlineOrdersAction(orderIds);
     if (result.success) {
@@ -297,6 +310,15 @@ export function OnlineOrdersPageClient({
         {/* Three long labels wrap into a ragged stack on a phone, so below sm
             they become a full-width column instead. */}
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <Button
+            variant="secondary"
+            className="rounded-[10px]"
+            disabled={selectedIds.size === 0}
+            onClick={() => setBulkVerifyDialogOpen(true)}
+          >
+            <BadgeCheck className="size-4" />
+            Verify Selected{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+          </Button>
           <Button
             variant="secondary"
             className="rounded-[10px]"
@@ -401,6 +423,19 @@ export function OnlineOrdersPageClient({
         onOpenChange={(open) => setRejectDialog((prev) => ({ ...prev, open }))}
         order={rejectDialog.order}
         onSubmit={handleReject}
+      />
+
+      <ConfirmBulkActionDialog
+        open={bulkVerifyDialogOpen}
+        onOpenChange={setBulkVerifyDialogOpen}
+        orderIds={Array.from(selectedIds)}
+        title="Verify Selected Payments"
+        description={(count) =>
+          `Mark payment received on ${count} selected order${count === 1 ? "" : "s"}? Check each screenshot first — this confirms the money actually arrived. Only orders still awaiting verification will change; others are skipped.`
+        }
+        confirmLabel="Verify"
+        confirmingLabel="Verifying..."
+        onConfirm={handleBulkVerify}
       />
 
       <ConfirmBulkActionDialog
