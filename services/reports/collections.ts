@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllAsResponse } from "@/lib/supabase/fetch-all";
 
 import { roundPaise } from "@/services/shared/payment";
 import type { Database } from "@/types/database.types";
@@ -81,24 +82,33 @@ export async function getCollectionsReport(
   const [salesRes, serviceRes, onlineRes] = await Promise.all([
     // Voided sales are corrections, not revenue (0029) — excluded from every
     // figure that adds up to money.
-    supabase
-      .from("sales")
-      .select("grand_total, payment_status, payment_mode, cash_amount, upi_amount, sale_date")
-      .is("voided_at", null)
-      .gte("sale_date", fromIso)
-      .lte("sale_date", toIso),
-    supabase
-      .from("service_jobs")
-      .select("grand_total, payment_status, payment_mode, cash_amount, upi_amount, completed_at")
-      .eq("status", "COMPLETED")
-      .gte("completed_at", fromIso)
-      .lte("completed_at", toIso),
-    supabase
-      .from("online_orders")
-      .select("total_amount, dispatched_at")
-      .eq("status", "DISPATCHED")
-      .gte("dispatched_at", fromIso)
-      .lte("dispatched_at", toIso),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("sales")
+        .select("grand_total, payment_status, payment_mode, cash_amount, upi_amount, sale_date")
+        .is("voided_at", null)
+        .gte("sale_date", fromIso)
+        .lte("sale_date", toIso)
+        .order("id")
+    ),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("service_jobs")
+        .select("grand_total, payment_status, payment_mode, cash_amount, upi_amount, completed_at")
+        .eq("status", "COMPLETED")
+        .gte("completed_at", fromIso)
+        .lte("completed_at", toIso)
+        .order("id")
+    ),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("online_orders")
+        .select("total_amount, dispatched_at")
+        .eq("status", "DISPATCHED")
+        .gte("dispatched_at", fromIso)
+        .lte("dispatched_at", toIso)
+        .order("id")
+    ),
   ]);
 
   if (salesRes.error) throw new Error(salesRes.error.message);

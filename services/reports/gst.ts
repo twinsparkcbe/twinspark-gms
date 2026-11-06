@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllAsResponse } from "@/lib/supabase/fetch-all";
 
 import { roundPaise } from "@/services/shared/payment";
 import type { Database } from "@/types/database.types";
@@ -100,24 +101,30 @@ export async function getGstReport(
   const toIso = range.to.toISOString();
 
   const [salesRes, serviceRes] = await Promise.all([
-    supabase
-      .from("sales")
-      .select(
-        "id, sale_date, invoice_number, subtotal, installation_total, gst_amount, grand_total, customers!inner(name)"
-      )
-      .is("voided_at", null)
-      .eq("gst_applicable", true)
-      .gte("sale_date", fromIso)
-      .lte("sale_date", toIso),
-    supabase
-      .from("service_jobs")
-      .select(
-        "id, completed_at, invoice_number, subtotal, inventory_total, gst_amount, grand_total, payment_status, customers!inner(name)"
-      )
-      .eq("status", "COMPLETED")
-      .eq("gst_applicable", true)
-      .gte("completed_at", fromIso)
-      .lte("completed_at", toIso),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("sales")
+        .select(
+          "id, sale_date, invoice_number, subtotal, installation_total, gst_amount, grand_total, customers!inner(name)"
+        )
+        .is("voided_at", null)
+        .eq("gst_applicable", true)
+        .gte("sale_date", fromIso)
+        .lte("sale_date", toIso)
+        .order("id")
+    ),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("service_jobs")
+        .select(
+          "id, completed_at, invoice_number, subtotal, inventory_total, gst_amount, grand_total, payment_status, customers!inner(name)"
+        )
+        .eq("status", "COMPLETED")
+        .eq("gst_applicable", true)
+        .gte("completed_at", fromIso)
+        .lte("completed_at", toIso)
+        .order("id")
+    ),
   ]);
 
   if (salesRes.error) throw new Error(salesRes.error.message);

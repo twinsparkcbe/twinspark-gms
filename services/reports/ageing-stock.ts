@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllAsResponse } from "@/lib/supabase/fetch-all";
 
 import type { Database, ItemType } from "@/types/database.types";
 
@@ -66,13 +67,18 @@ export async function listAgeingStock(
   monthsThreshold: number,
   now: Date = new Date()
 ): Promise<AgeingStockRow[]> {
-  const { data, error } = await supabase
-    .from("purchase_entries")
-    .select(
-      "inventory_item_id, remaining_quantity, unit_price, purchase_date, inventory_items!inner(product_name, sku_code, item_type, custom_type_label, brand_id, brands(name))"
-    )
-    .gt("remaining_quantity", 0)
-    .order("purchase_date", { ascending: true });
+  // Paged. `id` is a tie-break after purchase_date so pages stay stable; the
+  // row order the loop below relies on (oldest purchase_date first) is unchanged.
+  const { data, error } = await fetchAllAsResponse(() =>
+    supabase
+      .from("purchase_entries")
+      .select(
+        "inventory_item_id, remaining_quantity, unit_price, purchase_date, inventory_items!inner(product_name, sku_code, item_type, custom_type_label, brand_id, brands(name))"
+      )
+      .gt("remaining_quantity", 0)
+      .order("purchase_date", { ascending: true })
+      .order("id")
+  );
 
   if (error) throw new Error(error.message);
 

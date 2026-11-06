@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllAsResponse } from "@/lib/supabase/fetch-all";
 
 import type { Database } from "@/types/database.types";
 import { buildBuckets, findBucketIndex, type TrendGranularity } from "@/services/dashboard/buckets";
@@ -40,24 +41,33 @@ export async function getRevenueTrend(
   const [salesRes, serviceRes, onlineRes] = await Promise.all([
     // Voided sales are corrections, not revenue (0029) — excluded from every
     // figure that adds up to money.
-    supabase
-      .from("sales")
-      .select("grand_total, sale_date")
-      .is("voided_at", null)
-      .gte("sale_date", rangeStart)
-      .lt("sale_date", rangeEnd),
-    supabase
-      .from("service_jobs")
-      .select("grand_total, completed_at")
-      .eq("status", "COMPLETED")
-      .gte("completed_at", rangeStart)
-      .lt("completed_at", rangeEnd),
-    supabase
-      .from("online_orders")
-      .select("total_amount, dispatched_at")
-      .eq("status", "DISPATCHED")
-      .gte("dispatched_at", rangeStart)
-      .lt("dispatched_at", rangeEnd),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("sales")
+        .select("grand_total, sale_date")
+        .is("voided_at", null)
+        .gte("sale_date", rangeStart)
+        .lt("sale_date", rangeEnd)
+        .order("id")
+    ),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("service_jobs")
+        .select("grand_total, completed_at")
+        .eq("status", "COMPLETED")
+        .gte("completed_at", rangeStart)
+        .lt("completed_at", rangeEnd)
+        .order("id")
+    ),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("online_orders")
+        .select("total_amount, dispatched_at")
+        .eq("status", "DISPATCHED")
+        .gte("dispatched_at", rangeStart)
+        .lt("dispatched_at", rangeEnd)
+        .order("id")
+    ),
   ]);
 
   if (salesRes.error) throw new Error(salesRes.error.message);

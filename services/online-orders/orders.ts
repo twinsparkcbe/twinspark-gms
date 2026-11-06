@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 import { InsufficientStockError } from "@/services/shared/stock";
 import type { Database, OnlineOrderStatus } from "@/types/database.types";
@@ -458,16 +459,16 @@ export async function getOnlineRevenue(
   supabase: SupabaseClient<Database>,
   range: { from: Date; to: Date }
 ): Promise<OnlineRevenue> {
-  const { data, error } = await supabase
-    .from("online_orders")
-    .select("total_amount")
-    .eq("status", "DISPATCHED")
-    .gte("dispatched_at", range.from.toISOString())
-    .lte("dispatched_at", range.to.toISOString());
-
-  if (error) throw new Error(error.message);
-
-  const rows = (data ?? []) as { total_amount: number }[];
+  // Paged — PostgREST silently caps a response at 1000 rows.
+  const rows = await fetchAllRows<{ total_amount: number }>(() =>
+    supabase
+      .from("online_orders")
+      .select("total_amount")
+      .eq("status", "DISPATCHED")
+      .gte("dispatched_at", range.from.toISOString())
+      .lte("dispatched_at", range.to.toISOString())
+      .order("id")
+  );
 
   return {
     amount: rows.reduce((sum, row) => sum + Number(row.total_amount), 0),
@@ -482,14 +483,17 @@ export async function getOnlineOrdersReportStats(
   const fromIso = range.from.toISOString();
   const toIso = range.to.toISOString();
 
-  const [submittedRes, dispatchedRes, rejectedRes] = await Promise.all([
+  const [submittedRes, dispatchedRows, rejectedRes] = await Promise.all([
     supabase.from("online_orders").select("id", { count: "exact", head: true }).gte("created_at", fromIso).lte("created_at", toIso),
-    supabase
-      .from("online_orders")
-      .select("total_amount")
-      .eq("status", "DISPATCHED")
-      .gte("dispatched_at", fromIso)
-      .lte("dispatched_at", toIso),
+    fetchAllRows<{ total_amount: number }>(() =>
+      supabase
+        .from("online_orders")
+        .select("total_amount")
+        .eq("status", "DISPATCHED")
+        .gte("dispatched_at", fromIso)
+        .lte("dispatched_at", toIso)
+        .order("id")
+    ),
     supabase
       .from("online_orders")
       .select("id", { count: "exact", head: true })
@@ -499,10 +503,7 @@ export async function getOnlineOrdersReportStats(
   ]);
 
   if (submittedRes.error) throw new Error(submittedRes.error.message);
-  if (dispatchedRes.error) throw new Error(dispatchedRes.error.message);
   if (rejectedRes.error) throw new Error(rejectedRes.error.message);
-
-  const dispatchedRows = (dispatchedRes.data ?? []) as { total_amount: number }[];
 
   return {
     submittedCount: submittedRes.count ?? 0,

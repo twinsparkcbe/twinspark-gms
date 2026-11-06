@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PAGE_SIZE } from "@/lib/supabase/fetch-all";
 
 import { InsufficientStockError, StockAdjustmentAuthError } from "@/services/shared/stock";
 import type { Database, InstallationSubtype, ItemType, SaleLineType, SalePaymentStatus } from "@/types/database.types";
@@ -572,13 +573,30 @@ export async function getSalesStats(
   // getSale() and listSalesForCustomer() deliberately keep showing them, badged
   // — they are records, not revenue, and hiding the row is exactly what the
   // badge exists to avoid (0029).
-  const baseQuery = supabase.from("sales").select("grand_total").is("voided_at", null);
-  const filteredQuery = await applyFilters(supabase, baseQuery, { search: range?.search, dateFrom: from, dateTo: to });
-  const { data, error } = await filteredQuery;
+  // Paged — PostgREST silently caps a response at 1000 rows. Done inline rather
+  // than through fetchAllRows because applyFilters() resolves to the executed
+  // response (awaiting a builder runs it), so the page range has to be on the
+  // query before it goes in.
+  const rows: { grand_total: number }[] = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const pageQuery = supabase
+      .from("sales")
+      .select("grand_total")
+      .is("voided_at", null)
+      .order("id")
+      .range(offset, offset + PAGE_SIZE - 1);
+    const { data, error } = await applyFilters(supabase, pageQuery, {
+      search: range?.search,
+      dateFrom: from,
+      dateTo: to,
+    });
 
-  if (error) throw new Error(error.message);
+    if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as { grand_total: number }[];
+    const page = (data ?? []) as { grand_total: number }[];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
   return {
     totalSalesAmount: rows.reduce((sum, row) => sum + Number(row.grand_total), 0),
     saleCount: rows.length,

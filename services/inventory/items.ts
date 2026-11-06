@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 import type { Database, ItemType } from "@/types/database.types";
 
@@ -291,7 +292,7 @@ export async function listCustomTypeLabels(supabase: SupabaseClient<Database>): 
  * cost.
  */
 export async function getInventoryStats(supabase: SupabaseClient<Database>): Promise<InventoryStats> {
-  const [totalRes, lowRes, outRes, valueRes] = await Promise.all([
+  const [totalRes, lowRes, outRes, valueRows] = await Promise.all([
     supabase.from("inventory_items").select("id", { count: "exact", head: true }).eq("is_active", true),
     supabase
       .from("inventory_items")
@@ -306,18 +307,21 @@ export async function getInventoryStats(supabase: SupabaseClient<Database>): Pro
     // "!inner" forces an inner join so is_active can be filtered on the
     // embedded inventory_items resource (PostgREST requirement — see the
     // same pattern in services/purchases/entries.ts).
-    supabase
-      .from("purchase_entries")
-      .select("remaining_quantity, unit_price, inventory_items!inner(is_active)")
-      .eq("inventory_items.is_active", true),
+    // Paged — every batch ever bought is read, which passes the 1000-row cap.
+    fetchAllRows<{ remaining_quantity: number; unit_price: number }>(() =>
+      supabase
+        .from("purchase_entries")
+        .select("remaining_quantity, unit_price, inventory_items!inner(is_active)")
+        .eq("inventory_items.is_active", true)
+        .order("id")
+    ),
   ]);
 
   if (totalRes.error) throw new Error(totalRes.error.message);
   if (lowRes.error) throw new Error(lowRes.error.message);
   if (outRes.error) throw new Error(outRes.error.message);
-  if (valueRes.error) throw new Error(valueRes.error.message);
 
-  const inventoryValueCost = (valueRes.data ?? []).reduce(
+  const inventoryValueCost = valueRows.reduce(
     (sum, row: { remaining_quantity: number; unit_price: number }) =>
       sum + row.remaining_quantity * Number(row.unit_price),
     0

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fetchAllRows } from "./fetch-all";
+import { fetchAllAsResponse, fetchAllRows } from "./fetch-all";
 
 function source(total: number) {
   const calls: [number, number][] = [];
@@ -31,5 +31,19 @@ describe("fetchAllRows", () => {
   it("throws the database error", async () => {
     const build = () => ({ range: () => Promise.resolve({ data: null, error: { message: "boom" } }) });
     await expect(fetchAllRows(build)).rejects.toThrow("boom");
+  });
+});
+
+describe("fetchAllAsResponse", () => {
+  it("returns the plain { data, error } shape, with every page joined", async () => {
+    const { build } = source(1500);
+    const res = await fetchAllAsResponse<number>(build);
+    expect(res.error).toBeNull();
+    expect(res.data).toHaveLength(1500);
+  });
+
+  it("returns the error instead of throwing", async () => {
+    const build = () => ({ range: () => Promise.resolve({ data: null, error: { message: "boom" } }) });
+    expect(await fetchAllAsResponse(build)).toEqual({ data: null, error: { message: "boom" } });
   });
 });

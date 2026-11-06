@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllAsResponse } from "@/lib/supabase/fetch-all";
 
 import type { Database } from "@/types/database.types";
 
@@ -42,22 +43,28 @@ export async function getTrackTyreSalesTrend(
   const rangeEnd = buckets[buckets.length - 1].end.toISOString();
 
   const [saleItemsRes, dispatchedOrdersRes] = await Promise.all([
-    supabase
-      .from("sale_items")
-      .select("quantity, sales!inner(sale_date, voided_at), inventory_items!inner(product_name)")
-      .eq("line_type", "PRODUCT")
-      // Filtered through the !inner join on sales — a voided sale's units never
-      // left the shelf, so they can't count toward the trend (0029).
-      .is("sales.voided_at", null)
-      .in("inventory_items.product_name", ["Track Tyre - Front", "Track Tyre - Back"])
-      .gte("sales.sale_date", rangeStart)
-      .lt("sales.sale_date", rangeEnd),
-    supabase
-      .from("online_orders")
-      .select("quantity_front, quantity_back, dispatched_at")
-      .eq("status", "DISPATCHED")
-      .gte("dispatched_at", rangeStart)
-      .lt("dispatched_at", rangeEnd),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("sale_items")
+        .select("quantity, sales!inner(sale_date, voided_at), inventory_items!inner(product_name)")
+        .eq("line_type", "PRODUCT")
+        // Filtered through the !inner join on sales — a voided sale's units never
+        // left the shelf, so they can't count toward the trend (0029).
+        .is("sales.voided_at", null)
+        .in("inventory_items.product_name", ["Track Tyre - Front", "Track Tyre - Back"])
+        .gte("sales.sale_date", rangeStart)
+        .lt("sales.sale_date", rangeEnd)
+        .order("id")
+    ),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("online_orders")
+        .select("quantity_front, quantity_back, dispatched_at")
+        .eq("status", "DISPATCHED")
+        .gte("dispatched_at", rangeStart)
+        .lt("dispatched_at", rangeEnd)
+        .order("id")
+    ),
   ]);
 
   if (saleItemsRes.error) throw new Error(saleItemsRes.error.message);

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllAsResponse } from "@/lib/supabase/fetch-all";
 
 import type { Database } from "@/types/database.types";
 
@@ -83,15 +84,19 @@ export async function listFollowUpCandidates(
   now: Date = new Date()
 ): Promise<FollowUpCandidateRow[]> {
   const [customersRes, salesRes, serviceRes] = await Promise.all([
-    supabase.from("customers").select("id, name, mobile_number").limit(5000),
+    fetchAllAsResponse(() => supabase.from("customers").select("id, name, mobile_number").order("id")),
     // A voided sale must never make a customer look "recently served" — that
     // would suppress a follow-up call for a visit that never happened.
-    supabase
-      .from("sales")
-      .select("customer_id, sale_date, sale_items(line_type, inventory_items(product_name))")
-      .is("voided_at", null)
-      .limit(20000),
-    supabase.from("service_jobs").select("customer_id, completed_at").eq("status", "COMPLETED").limit(20000),
+    fetchAllAsResponse(() =>
+      supabase
+        .from("sales")
+        .select("customer_id, sale_date, sale_items(line_type, inventory_items(product_name))")
+        .is("voided_at", null)
+        .order("id")
+    ),
+    fetchAllAsResponse(() =>
+      supabase.from("service_jobs").select("customer_id, completed_at").eq("status", "COMPLETED").order("id")
+    ),
   ]);
 
   if (customersRes.error) throw new Error(customersRes.error.message);

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllAsResponse } from "@/lib/supabase/fetch-all";
 
 import { roundPaise } from "@/services/shared/payment";
 import type { Database } from "@/types/database.types";
@@ -208,12 +209,15 @@ export async function getServiceProfitReport(
   supabase: SupabaseClient<Database>,
   range: { from: Date; to: Date }
 ): Promise<ServiceProfitReport> {
-  const { data, error } = await supabase
-    .from("service_jobs")
-    .select(SELECT_COLUMNS)
-    .eq("status", "COMPLETED")
-    .gte("completed_at", range.from.toISOString())
-    .lte("completed_at", range.to.toISOString());
+  const { data, error } = await fetchAllAsResponse(() =>
+    supabase
+      .from("service_jobs")
+      .select(SELECT_COLUMNS)
+      .eq("status", "COMPLETED")
+      .gte("completed_at", range.from.toISOString())
+      .lte("completed_at", range.to.toISOString())
+      .order("id")
+  );
 
   if (error) throw new Error(error.message);
 
