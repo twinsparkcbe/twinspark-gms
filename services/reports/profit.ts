@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/types/database.types";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { buildBuckets, findBucketIndex, type TrendGranularity } from "@/services/dashboard/buckets";
 
 export interface ProfitPoint {
@@ -69,68 +70,76 @@ export async function getProfitTrend(
   const rangeStart = buckets[0].start.toISOString();
   const rangeEnd = buckets[buckets.length - 1].end.toISOString();
 
-  const [salesRes, onlineRes, serviceRes, cogsRes] = await Promise.all([
+  // Every query is read page by page: PostgREST caps a response at 1000 rows
+  // without any error, which used to drop the newest months of COGS.
+  const [salesRows, onlineRows, serviceRows, cogsRowsRaw] = await Promise.all([
     // Voided sales are corrections, not revenue (0029) — excluded from every
     // figure that adds up to money.
     // COGS below needs no equivalent filter: voiding writes a reversing
     // stock_movement, so the two SALE rows cancel out on their own.
-    supabase
-      .from("sales")
-      .select("grand_total, sale_date")
-      .is("voided_at", null)
-      .gte("sale_date", rangeStart)
-      .lt("sale_date", rangeEnd),
-    supabase
-      .from("online_orders")
-      .select("total_amount, dispatched_at")
-      .eq("status", "DISPATCHED")
-      .gte("dispatched_at", rangeStart)
-      .lt("dispatched_at", rangeEnd),
+    fetchAllRows<{ grand_total: number; sale_date: string }>(() =>
+      supabase
+        .from("sales")
+        .select("grand_total, sale_date")
+        .is("voided_at", null)
+        .gte("sale_date", rangeStart)
+        .lt("sale_date", rangeEnd)
+        .order("id")
+    ),
+    fetchAllRows<{ total_amount: number; dispatched_at: string | null }>(() =>
+      supabase
+        .from("online_orders")
+        .select("total_amount, dispatched_at")
+        .eq("status", "DISPATCHED")
+        .gte("dispatched_at", rangeStart)
+        .lt("dispatched_at", rangeEnd)
+        .order("id")
+    ),
     // Bucketed by completed_at, matching getServiceStats and the Dashboard:
     // a job earns on the day it is billed, not the day it was booked in.
-    supabase
-      .from("service_jobs")
-      .select("grand_total, completed_at")
-      .eq("status", "COMPLETED")
-      .gte("completed_at", rangeStart)
-      .lt("completed_at", rangeEnd),
-    supabase
-      .from("stock_movements")
-      .select("delta, created_at, purchase_entries!inner(unit_price)")
-      .in("reason", ["SALE", "ONLINE_ORDER_DISPATCH", "SERVICE_USAGE"])
-      .gte("created_at", rangeStart)
-      .lt("created_at", rangeEnd),
+    fetchAllRows<{ grand_total: number; completed_at: string | null }>(() =>
+      supabase
+        .from("service_jobs")
+        .select("grand_total, completed_at")
+        .eq("status", "COMPLETED")
+        .gte("completed_at", rangeStart)
+        .lt("completed_at", rangeEnd)
+        .order("id")
+    ),
+    fetchAllRows<{ delta: number; created_at: string; purchase_entries: EmbeddedBatch }>(() =>
+      supabase
+        .from("stock_movements")
+        .select("delta, created_at, purchase_entries!inner(unit_price)")
+        .in("reason", ["SALE", "ONLINE_ORDER_DISPATCH", "SERVICE_USAGE"])
+        .gte("created_at", rangeStart)
+        .lt("created_at", rangeEnd)
+        .order("id")
+    ),
   ]);
-
-  if (salesRes.error) throw new Error(salesRes.error.message);
-  if (onlineRes.error) throw new Error(onlineRes.error.message);
-  if (serviceRes.error) throw new Error(serviceRes.error.message);
-  if (cogsRes.error) throw new Error(cogsRes.error.message);
 
   const salesTotals = new Array(buckets.length).fill(0) as number[];
   const onlineTotals = new Array(buckets.length).fill(0) as number[];
   const serviceTotals = new Array(buckets.length).fill(0) as number[];
   const cogsTotals = new Array(buckets.length).fill(0) as number[];
 
-  for (const row of (salesRes.data ?? []) as { grand_total: number; sale_date: string }[]) {
+  for (const row of salesRows) {
     const idx = findBucketIndex(buckets, row.sale_date);
     if (idx >= 0) salesTotals[idx] += Number(row.grand_total);
   }
 
-  for (const row of (onlineRes.data ?? []) as { total_amount: number; dispatched_at: string | null }[]) {
+  for (const row of onlineRows) {
     if (!row.dispatched_at) continue;
     const idx = findBucketIndex(buckets, row.dispatched_at);
     if (idx >= 0) onlineTotals[idx] += Number(row.total_amount);
   }
 
-  for (const row of (serviceRes.data ?? []) as { grand_total: number; completed_at: string | null }[]) {
+  for (const row of serviceRows) {
     if (!row.completed_at) continue;
     const idx = findBucketIndex(buckets, row.completed_at);
     if (idx >= 0) serviceTotals[idx] += Number(row.grand_total);
   }
 
-  const cogsRows = (cogsRes.data ?? []) as unknown as { delta: number; created_at: string; purchase_entries: EmbeddedBatch }[];
-  for (const row of cogsRows) {
+  for (const row of cogsRowsRaw) {
     const idx = findBucketIndex(buckets, row.created_at);
     if (idx < 0) continue;
     const batch = firstBatch(row.purchase_entries);

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import type { Database } from "@/types/database.types";
 
 type EmbeddedBatch = { unit_price: number } | { unit_price: number }[] | null;
@@ -45,16 +46,17 @@ export async function getCostOfGoodsSold(
   supabase: SupabaseClient<Database>,
   range: { from: Date; to: Date }
 ): Promise<number> {
-  const { data, error } = await supabase
-    .from("stock_movements")
-    .select("delta, purchase_entries!inner(unit_price)")
-    .in("reason", ["SALE", "SERVICE_USAGE", "ONLINE_ORDER_DISPATCH"])
-    .gte("created_at", range.from.toISOString())
-    .lte("created_at", range.to.toISOString());
-
-  if (error) throw new Error(error.message);
-
-  const rows = (data ?? []) as unknown as { delta: number; purchase_entries: EmbeddedBatch }[];
+  // Paged: PostgREST silently caps a response at 1000 rows, which made COGS
+  // (and so Profit) under-count on any busy range.
+  const rows = await fetchAllRows<{ delta: number; purchase_entries: EmbeddedBatch }>(() =>
+    supabase
+      .from("stock_movements")
+      .select("delta, purchase_entries!inner(unit_price)")
+      .in("reason", ["SALE", "SERVICE_USAGE", "ONLINE_ORDER_DISPATCH"])
+      .gte("created_at", range.from.toISOString())
+      .lte("created_at", range.to.toISOString())
+      .order("id")
+  );
 
   return rows.reduce((sum, row) => {
     const batch = firstBatch(row.purchase_entries);
