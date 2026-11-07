@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 import { InsufficientStockError, StockAdjustmentAuthError } from "@/services/shared/stock";
 import type { PaymentMode } from "@/services/shared/payment";
@@ -878,16 +879,16 @@ export async function getServiceStats(
   const from = range?.from ?? startOfMonth(new Date());
   const to = range?.to ?? new Date();
 
-  const { data, error } = await supabase
-    .from("service_jobs")
-    .select("grand_total, payment_status")
-    .eq("status", "COMPLETED")
-    .gte("completed_at", from.toISOString())
-    .lte("completed_at", to.toISOString());
-
-  if (error) throw new Error(error.message);
-
-  const rows = (data ?? []) as { grand_total: number; payment_status: ServicePaymentStatus | null }[];
+  // Paged — PostgREST silently caps a response at 1000 rows.
+  const rows = await fetchAllRows<{ grand_total: number; payment_status: ServicePaymentStatus | null }>(() =>
+    supabase
+      .from("service_jobs")
+      .select("grand_total, payment_status")
+      .eq("status", "COMPLETED")
+      .gte("completed_at", from.toISOString())
+      .lte("completed_at", to.toISOString())
+      .order("id")
+  );
   const grossCompletedRevenue = rows.reduce((sum, row) => sum + Number(row.grand_total), 0);
   const collectedRevenue = rows
     .filter((row) => row.payment_status !== "FREE_SERVICE")

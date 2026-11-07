@@ -10,10 +10,12 @@
  */
 export const PAGE_SIZE = 1000;
 
+interface PageableQuery {
+  range: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+}
+
 export async function fetchAllRows<T>(
-  buildQuery: () => {
-    range: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
-  },
+  buildQuery: () => PageableQuery,
   pageSize: number = PAGE_SIZE
 ): Promise<T[]> {
   const all: T[] = [];
@@ -23,5 +25,22 @@ export async function fetchAllRows<T>(
     const rows = (data ?? []) as T[];
     all.push(...rows);
     if (rows.length < pageSize) return all;
+  }
+}
+
+/**
+ * Same paging, but resolves to the `{ data, error }` shape a plain awaited
+ * query returns — so a call site can swap `supabase.from(...)...` for
+ * `fetchAllAsResponse(() => supabase.from(...)....order("id"))` and leave the
+ * error handling and row processing below it untouched.
+ */
+export async function fetchAllAsResponse<T>(
+  buildQuery: () => PageableQuery,
+  pageSize: number = PAGE_SIZE
+): Promise<{ data: T[] | null; error: { message: string } | null }> {
+  try {
+    return { data: await fetchAllRows<T>(buildQuery, pageSize), error: null };
+  } catch (e) {
+    return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
   }
 }

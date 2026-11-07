@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 import {
   InsufficientStockError,
@@ -337,21 +338,21 @@ export async function getPurchaseStats(
   const from = range?.from ?? startOfMonth(new Date());
   const to = range?.to ?? new Date();
 
-  const baseQuery = supabase
-    .from("purchase_entries")
-    .select("total_amount, inventory_items!inner(product_name, sku_code, item_type, brand_id)");
-
-  const { data, error } = await applyFilters(baseQuery, {
-    search: range?.search,
-    itemTypes: range?.itemTypes,
-    brandIds: range?.brandIds,
-    dateFrom: from,
-    dateTo: to,
-  });
-
-  if (error) throw new Error(error.message);
-
-  const rows = (data ?? []) as { total_amount: number }[];
+  // Paged — PostgREST silently caps a response at 1000 rows.
+  const rows = await fetchAllRows<{ total_amount: number }>(() =>
+    applyFilters(
+      supabase
+        .from("purchase_entries")
+        .select("total_amount, inventory_items!inner(product_name, sku_code, item_type, brand_id)"),
+      {
+        search: range?.search,
+        itemTypes: range?.itemTypes,
+        brandIds: range?.brandIds,
+        dateFrom: from,
+        dateTo: to,
+      }
+    ).order("id")
+  );
   return {
     totalPurchaseAmount: rows.reduce((sum, row) => sum + Number(row.total_amount), 0),
     entryCount: rows.length,
